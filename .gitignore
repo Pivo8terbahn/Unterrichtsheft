@@ -1,0 +1,10 @@
+# Nie veröffentlichen: schulinterne Vorlagen, Daten, Sicherungen, fremde Spielsammlungen
+schuldaten.js
+Daten/
+*.json
+!manifest.webmanifest
+*.pdf
+*.doc
+*.docx
+README.md
+ANLEITUNG-Synchronisation.md
