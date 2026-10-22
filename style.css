@@ -128,7 +128,7 @@ textarea { resize: vertical; line-height: 1.45; }
 .day-head { height: var(--headh); background: var(--ochre); color: #2b2205; padding: 5px 8px; display: flex; flex-direction: column; align-items: center; overflow: hidden; border-bottom-color: var(--ochre-line) !important; }
 .day-head.corner { background: var(--ochre); }
 .dh-name { font-family: var(--font-head); font-size: 21px; line-height: 1.1; font-weight: 700; }
-.dh-date { font-size: 15px; margin-top: 2px; }
+.dh-date { font-size: 15px; font-weight: 700; margin-top: 2px; }
 .day.today .dh-name { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
 .dh-badges { display: flex; align-items: center; gap: 4px; width: 100%; margin-top: auto; min-height: 36px; flex: none; }
 .dh-badges .bdg-row { flex: 1; justify-content: center; max-height: 36px; }
@@ -639,7 +639,7 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 
 /* Handschrift */
 .week-grid { position: relative; }
-.ink-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; }
+.ink-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; mix-blend-mode: multiply; }
 .ink-layer.active { pointer-events: auto; cursor: crosshair; touch-action: pan-x pan-y; }
 .ink-layer.active.erase { cursor: cell; }
 .ink-toggle.on, .ink-bar .btn.on { background: var(--ochre); color: #fff; border-color: var(--ochre); }
@@ -654,7 +654,8 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 @media print { .ink-layer { display: block !important; } }
 
 /* Synchronisation */
-.topbar-state { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.topbar-state { display: flex; align-items: center; gap: 10px; }
+.ts-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .sync-state { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .sync-state.ok { color: #2e8b57; }
 .sync-state.warn { color: #b7791f; }
@@ -683,3 +684,13 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 
 /* Hausaufgaben in der Fachfarbe (Kürzel am Anfang, z. B. «E: …») */
 .dhw .dtask-text.ha-sub { color: color-mix(in srgb, var(--hac) 78%, #000); font-weight: 600; }
+
+/* Schnellknöpfe Laden/Speichern (iPad/iPhone) */
+.fs-quick { display: flex; gap: 6px; align-items: center; }
+.fs-quick[hidden] { display: none; }
+.fs-quick .btn { white-space: nowrap; }
+.fs-quick .fsq-load { border-color: var(--ochre); }
+.topbar-state { margin-left: auto; }
+@media (max-width: 1200px) { .fs-quick:not([hidden]) + .ts-col { display: none; } }
+.ink-layer.active.marker { cursor: text; }
+.ink-color.ink-hl { border-radius: 6px; width: 34px; }

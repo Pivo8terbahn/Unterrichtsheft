@@ -702,18 +702,24 @@ window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = set
 // Striche pro Woche in state.ink[Wochenmontag]: { di, c: Farbe, w: Dicke, p: [[x-Anteil der Tagesspalte, y in px, Druck]] }
 const INK_COLORS = [['#1b1b1b', 'Schwarz'], ['#1f4fd1', 'Blau'], ['#d62828', 'Rot'], ['#1e8a3e', 'Grün'], ['#8e5cc2', 'Violett'], ['#e07b00', 'Orange']];
 const INK_WIDTHS = [[2, 'dünn'], [4, 'mittel'], [8, 'dick']];
-const ink = { on: false, tool: 'pen', color: '#1f4fd1', width: 4 };
+// Leuchtstift: drei Pastelltöne, die sich vom cremefarbenen Raster abheben
+const INK_HL = [['#ff8fc8', 'Rosa'], ['#7fe0a0', 'Mintgrün'], ['#8fc8ff', 'Hellblau']];
+const INK_HL_WIDTH = 16, INK_HL_ALPHA = 0.6;
+const ink = { on: false, tool: 'pen', color: '#1f4fd1', width: 4, hl: '#ff8fc8' };
 try { Object.assign(ink, JSON.parse(localStorage.getItem('uh-ink') || '{}'), { on: false }); } catch {}
-function inkPrefsSave() { try { localStorage.setItem('uh-ink', JSON.stringify({ tool: ink.tool, color: ink.color, width: ink.width })); } catch {} }
+function inkPrefsSave() { try { localStorage.setItem('uh-ink', JSON.stringify({ tool: ink.tool, color: ink.color, width: ink.width, hl: ink.hl })); } catch {} }
 let inkRedraw = null;
 function inkBarHTML(mk) {
   return `<div class="ink-bar no-print" role="toolbar" aria-label="Stiftwerkzeuge">
     <button type="button" class="btn ${ink.tool === 'pen' ? 'on' : ''}" data-inkbtn="pen" aria-pressed="${ink.tool === 'pen'}">✎ Stift</button>
+    <button type="button" class="btn ${ink.tool === 'marker' ? 'on' : ''}" data-inkbtn="marker" aria-pressed="${ink.tool === 'marker'}">🖍 Leuchtstift</button>
     <button type="button" class="btn ${ink.tool === 'erase' ? 'on' : ''}" data-inkbtn="erase" aria-pressed="${ink.tool === 'erase'}">⌫ Radierer</button>
     <span class="ink-sep"></span>
     ${INK_COLORS.map(([c, n]) => `<button type="button" class="ink-color ${ink.color === c && ink.tool === 'pen' ? 'on' : ''}" style="--ic:${c}" data-inkcolor="${c}" title="${n}" aria-label="Farbe ${n}"></button>`).join('')}
     <span class="ink-sep"></span>
     ${INK_WIDTHS.map(([w, n]) => `<button type="button" class="ink-width ${ink.width === w && ink.tool === 'pen' ? 'on' : ''}" data-inkw="${w}" title="${n}" aria-label="Dicke ${n}"><i style="height:${w}px;background:${ink.color}"></i></button>`).join('')}
+    <span class="ink-sep"></span>
+    ${INK_HL.map(([c, n]) => `<button type="button" class="ink-color ink-hl ${ink.hl === c && ink.tool === 'marker' ? 'on' : ''}" style="--ic:${c}" data-inkhl="${c}" title="Leuchtstift ${n}" aria-label="Leuchtstift ${n}"></button>`).join('')}
     <span class="ink-hint muted">Mit dem Stift schreiben, mit dem Finger scrollen</span>
     <button type="button" class="btn small" data-inkbtn="clear" ${(state.ink[mk] || []).length ? '' : 'disabled'}>Seite leeren</button>
     <button type="button" class="btn primary small" data-inkbtn="toggle">Fertig</button>
@@ -723,7 +729,7 @@ function inkSetup(root, mk) {
   const grid = root.querySelector('.week-grid');
   if (!grid) { inkRedraw = null; return; }
   const cv = document.createElement('canvas');
-  cv.className = 'ink-layer' + (ink.on ? ' active' : '') + (ink.on && ink.tool === 'erase' ? ' erase' : '');
+  cv.className = 'ink-layer' + (ink.on ? ' active' : '') + (ink.on && ink.tool === 'erase' ? ' erase' : '') + (ink.on && ink.tool === 'marker' ? ' marker' : '');
   grid.appendChild(cv);
   const ctx = cv.getContext('2d');
   const cols = () => {
@@ -741,6 +747,13 @@ function inkSetup(root, mk) {
   const drawStroke = s => {
     if (!C[s.di]) return;
     const pts = s.p.map(q => toPx(s, q));
+    if (s.t === 'm') {
+      // Leuchtstift: ein durchgehender, halbtransparenter Strich ohne dunkle Überlappungen
+      ctx.save(); ctx.globalAlpha = INK_HL_ALPHA; ctx.strokeStyle = s.c; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      if (pts.length === 1) ctx.lineTo(pts[0][0] + 0.1, pts[0][1]); else for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke(); ctx.restore(); return;
+    }
     if (pts.length === 1) { ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], s.w / 2, 0, 7); ctx.fill(); return; }
     for (let i = 1; i < pts.length; i++) seg(s, pts[i - 1], pts[i]);
   };
@@ -749,7 +762,14 @@ function inkSetup(root, mk) {
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     C = cols();
-    (state.ink[mk] || []).forEach(drawStroke);
+    paint();
+  };
+  // Leuchtstift zuerst, damit die Schrift darüber liegt
+  const paint = extra => {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const list = (state.ink[mk] || []).concat(extra ? [extra] : []);
+    list.filter(s => s.t === 'm').forEach(drawStroke);
+    list.filter(s => s.t !== 'm').forEach(drawStroke);
   };
   inkRedraw = redraw;
   redraw();
@@ -777,7 +797,9 @@ function inkSetup(root, mk) {
     if (ink.tool === 'erase') { erasing = true; changed = false; eraseAt(x, y); return; }
     const di = colAt(x); if (!di) return;
     const col = C[di];
-    cur = { di, c: ink.color, w: ink.width, p: [[+((x - col.x) / col.w).toFixed(4), +y.toFixed(1), +pr.toFixed(2)]] };
+    cur = ink.tool === 'marker'
+      ? { di, t: 'm', c: ink.hl, w: INK_HL_WIDTH, p: [[+((x - col.x) / col.w).toFixed(4), +y.toFixed(1), 0.5]] }
+      : { di, c: ink.color, w: ink.width, p: [[+((x - col.x) / col.w).toFixed(4), +y.toFixed(1), +pr.toFixed(2)]] };
   });
   cv.addEventListener('pointermove', e => {
     if (!cur && !erasing) return;
@@ -789,8 +811,10 @@ function inkSetup(root, mk) {
       const col = C[cur.di], q = [+((x - col.x) / col.w).toFixed(4), +y.toFixed(1), +pr.toFixed(2)];
       const prev = toPx(cur, cur.p[cur.p.length - 1]);
       if (Math.hypot(prev[0] - x, prev[1] - y) < 1.2) continue;
-      cur.p.push(q); seg(cur, prev, toPx(cur, q));
+      cur.p.push(q);
+      if (cur.t !== 'm') seg(cur, prev, toPx(cur, q));
     }
+    if (cur && cur.t === 'm') paint(cur);
   });
   const end = () => {
     if (cur) { (state.ink[mk] = state.ink[mk] || []).push(cur); cur = null; save(true); redraw(); const cb = document.querySelector('[data-inkbtn="clear"]'); if (cb) cb.disabled = false; }
@@ -968,7 +992,7 @@ function renderWeek(v) {
   if (act) pl.scrollTop = act.offsetTop - pl.clientHeight / 3;
 
   v.onclick = e => {
-    const t = e.target.closest('[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
+    const t = e.target.closest('[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-inkhl],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
     if (!t) return;
     const ds = t.dataset;
     if (ds.pagetoggle) { pagesToggle(ds.pagetoggle); const pl = v.querySelector('.pages-list'), y = pl ? pl.scrollTop : 0; render(); const pl2 = v.querySelector('.pages-list'); if (pl2) pl2.scrollTop = y; return; }
@@ -977,9 +1001,10 @@ function renderWeek(v) {
       if (ds.pageweek === mk) { pagesToggle(mk); const pl = v.querySelector('.pages-list'), y = pl ? pl.scrollTop : 0; render(); const pl2 = v.querySelector('.pages-list'); if (pl2) pl2.scrollTop = y; return; }
       pagesToggle(ds.pageweek, true);
     }
-    if (ds.inkbtn || ds.inkcolor || ds.inkw) {
+    if (ds.inkbtn || ds.inkcolor || ds.inkw || ds.inkhl) {
       if (ds.inkbtn === 'toggle') ink.on = !ink.on;
-      else if (ds.inkbtn === 'pen' || ds.inkbtn === 'erase') ink.tool = ds.inkbtn;
+      else if (ds.inkbtn === 'pen' || ds.inkbtn === 'erase' || ds.inkbtn === 'marker') ink.tool = ds.inkbtn;
+      if (ds.inkhl) { ink.hl = ds.inkhl; ink.tool = 'marker'; }
       else if (ds.inkbtn === 'clear') { if (!(state.ink[mk] || []).length || !confirm('Alle Handschrift auf dieser Wochenseite löschen?')) return; delete state.ink[mk]; save(); }
       if (ds.inkcolor) { ink.color = ds.inkcolor; ink.tool = 'pen'; }
       if (ds.inkw) { ink.width = Number(ds.inkw); ink.tool = 'pen'; }

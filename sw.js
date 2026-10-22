@@ -1,6 +1,6 @@
 // Service Worker: hält die App-Dateien auf dem Gerät bereit, damit sie auch ohne Internet startet.
 // Bei jeder neuen App-Version VERSION erhöhen.
-const VERSION = 'uh-2026-10-22a';
+const VERSION = 'uh-2026-10-22c';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'games.js', 'sync.js', 'foldersync.js', 'sync-config.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   'bilder/geburtstag.jpg', 'bilder/meeting-herti-team.jpg', 'bilder/meeting-u-team.jpg', 'bilder/pausenaufsicht.jpg', 'bilder/schwimmunterricht.jpg', 'bilder/zaz-ip.jpg'];

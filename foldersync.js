@@ -121,14 +121,26 @@ async function fsLoadFromFile(file) {
     const r = await fsApplyRemote(pkg);
     fsLS.set('dirty', !r.sameAsRemote);
     fsLS.set('mode', 'manual'); fsLS.set('loaded', fsHM() + ', ' + new Date().toLocaleDateString('de-CH'));
-    fsStatus();
-    alert('Stand aus dem OneDrive geladen und zusammengeführt.');
+    fsSessionDone = true;
+    fsStatus(); fsPrepareSoon();
+    setSyncState('☁ Aus OneDrive geladen ' + fsHM(), 'ok');
   } catch (e) { alert('Laden nicht möglich: ' + e.message); }
   syncMountCard();
 }
+// Datei für das Teilen-Menü im Voraus bereitstellen: Safari öffnet es nur direkt nach dem Tippen
+let fsPrepared = null, fsPrepTimer = null;
+async function fsPrepare() {
+  try {
+    const snap = state._mtime || 0;
+    const pkg = await fsBuildPackage();
+    fsPrepared = { mtime: snap, file: new File([JSON.stringify(pkg)], FS_NAME, { type: 'application/json' }) };
+  } catch (e) { console.warn('Vorbereiten', e); }
+}
+function fsPrepareSoon() { clearTimeout(fsPrepTimer); fsPrepTimer = setTimeout(fsPrepare, 1200); }
 async function fsSaveToOneDrive() {
-  const pkg = await fsBuildPackage();
-  const file = new File([JSON.stringify(pkg)], FS_NAME, { type: 'application/json' });
+  let file;
+  if (fsPrepared && fsPrepared.mtime === (state._mtime || 0)) file = fsPrepared.file;
+  else { const pkg = await fsBuildPackage(); file = new File([JSON.stringify(pkg)], FS_NAME, { type: 'application/json' }); }
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Unterrichtsheft-Daten' });
     else {
@@ -136,6 +148,7 @@ async function fsSaveToOneDrive() {
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
     }
     fsLS.set('mode', 'manual'); fsLS.set('dirty', false); fsLS.set('saved', fsHM() + ', ' + new Date().toLocaleDateString('de-CH'));
+    fsSessionDone = true;
   } catch (e) { if (e.name !== 'AbortError') alert('Speichern nicht möglich: ' + e.message); }
   fsStatus(); syncMountCard();
 }
@@ -149,14 +162,30 @@ function fsStatus() {
     if (!fsGranted) setSyncState('☁ Tippen, um die OneDrive-Datei freizugeben', 'warn');
   } else if (mode === 'manual') {
     if (fsLS.get('dirty', false)) setSyncState('☁ Änderungen noch nicht im OneDrive', 'warn');
-    else setSyncState('☁ Stand wie im OneDrive', 'ok');
+    else if (fsSessionDone) setSyncState('☁ Stand wie im OneDrive', 'ok');
+    else setSyncState('');
   }
+  fsQuickRender();
 }
+// Schnellknöpfe oben (iPad/iPhone): «Laden» zu Beginn, «Speichern» bei ungespeicherten Änderungen
+let fsSessionDone = false;
+function fsQuickRender() {
+  const el = document.getElementById('fsQuick');
+  if (!el) return;
+  const manual = !fsGraphOn() && fsLS.get('mode', null) === 'manual' && !fsCanWrite();
+  if (!manual) { el.innerHTML = ''; el.hidden = true; return; }
+  const dirty = fsLS.get('dirty', false);
+  el.hidden = false;
+  el.innerHTML = (!fsSessionDone ? `<label class="btn small fsq-load" title="Neusten Stand aus dem OneDrive holen">☁ Laden<input type="file" accept="application/json,.json" hidden data-fsquickload></label>` : '')
+    + (dirty ? `<button type="button" class="btn small primary fsq-save" data-fsquick="save" title="Änderungen ins OneDrive speichern">☁ Speichern</button>` : '');
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-fsquick="save"]')) fsSaveToOneDrive(); });
+document.addEventListener('change', e => { if (e.target.matches('[data-fsquickload]') && e.target.files[0]) fsLoadFromFile(e.target.files[0]); });
 function folderOnSave() {
   if (fsGraphOn() || !fsLS.get('mode', null)) return;
   fsLS.set('dirty', true);
   if (fsLS.get('mode') === 'file' && fsHandle && fsGranted) { clearTimeout(fsTimer); fsTimer = setTimeout(() => fsSyncFile(), 4000); }
-  else fsStatus();
+  else { fsStatus(); fsPrepareSoon(); }
 }
 function folderCardHTML() {
   if (fsGraphOn()) return '';
@@ -222,6 +251,6 @@ async function folderInit() {
       try { fsGranted = (await fsHandle.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch { fsGranted = false; }
       if (fsGranted) { await fsSyncFile(); fsStart(); } else fsStatus();
     }
-  } else fsStatus();
+  } else { fsStatus(); if (fsLS.get('mode', null) === 'manual') fsPrepareSoon(); }
 }
 if (window.__appReady) folderInit();
