@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unterrichtsheft</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#bf9000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Unterrichtsheft">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">UH</span>
+      <div><strong>Unterrichtsheft</strong><small id="brandClass"></small></div>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Bereiche">
+      <button type="button" data-view="week" class="active">Woche</button>
+      <button type="button" data-view="cowork">CoWork</button>
+      <button type="button" data-view="year">Jahresplanung</button>
+      <button type="button" data-view="agenda">Termine &amp; To-dos</button>
+      <button type="button" data-view="settings">Einstellungen</button>
+    </nav>
+    <span class="topbar-state"><span class="save-state" id="saveState" aria-live="polite">Gespeichert</span><span class="sync-state" id="syncState" hidden></span></span>
+  </header>
+
+  <main id="view"></main>
+
+  <dialog id="lessonDlg" class="panel"></dialog>
+  <dialog id="pickDlg" class="picker"></dialog>
+  <dialog id="lightbox" class="lightbox"><img alt="Bild in Grossansicht"></dialog>
+
+  <script src="games.js"></script>
+  <script src="schuldaten.js"></script>
+  <script src="app.js"></script>
+  <script src="sync-config.js"></script>
+  <script src="sync.js"></script>
+  <script src="foldersync.js"></script>
+</body>
+</html>
