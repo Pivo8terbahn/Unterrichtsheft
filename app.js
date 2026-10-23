@@ -73,7 +73,7 @@ function defaultBadges() {
     ['ZAZ/IP', 'bilder/zaz-ip.jpg']
   ].map(([name, src]) => ({ id: uid(), name, src }));
 }
-const SHORTS = { 'Deutsch': 'D', 'Mathematik': 'M', 'NMG': 'NMG', 'Englisch': 'E', 'TTG': 'TG', 'TG': 'TG', 'Musik': 'MU', 'Medien und Informatik': 'MI' };
+const SHORTS = { 'Deutsch': 'D', 'Mathematik': 'M', 'NMG': 'NMG', 'Englisch': 'E', 'TTG': 'TG', 'TG': 'TG', 'Musik': 'MU', 'Medien und Informatik': 'MI', 'Bildnerisches Gestalten': 'BG', 'Bewegung und Sport': 'BS' };
 const shortFor = name => SHORTS[name] || String(name || '').slice(0, 3);
 // Fach am Anfang einer Hausaufgabe erkennen, z. B. «E: Wörter lernen» → Englisch
 const HA_ALIASES = { MA: 'Mathematik', DE: 'Deutsch', EN: 'Englisch', ENG: 'Englisch', MU: 'Musik', TTG: 'TTG', TG: 'TTG', MI: 'Medien und Informatik' };
@@ -92,7 +92,8 @@ const DEFAULT_SLOTS = [
 function defaults() {
   const subjects = [
     ['Deutsch', '#d93b3b'], ['Mathematik', '#2f6fd6'], ['NMG', '#2e9b57'], ['Englisch', '#d6a300'],
-    ['TTG', '#e57c23'], ['Musik', '#159e9e'], ['Medien und Informatik', '#7b5cd6']
+    ['TTG', '#e57c23'], ['Musik', '#159e9e'], ['Medien und Informatik', '#7b5cd6'],
+    ['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f']
   ].map(([name, color]) => ({ id: uid(), name, short: shortFor(name), color }));
   const slots = DEFAULT_SLOTS.map(([from, to]) => ({ id: uid(), from, to }));
   return {
@@ -150,6 +151,13 @@ function migrate(s) {
   if (!out.gameRoll) out.gameRoll = {};
   if (!out.meetDetails) out.meetDetails = {};
   if (!out.ink) out.ink = {};
+  // Fächer BG und BS einmalig ergänzen (danach in den Einstellungen frei änderbar oder löschbar)
+  out.imports = out.imports || {};
+  if (!out.imports.subjBGBS && out.settings && out.settings.subjects) {
+    for (const [name, color] of [['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f']])
+      if (!out.settings.subjects.some(x => x.name === name || x.short === SHORTS[name])) out.settings.subjects.push({ id: uid(), name, short: SHORTS[name], color });
+    out.imports.subjBGBS = true;
+  }
   if (!out.fixed) out.fixed = typeof SWIM_2627 !== 'undefined' ? SWIM_2627.map(x => ({ ...x })) : [];
   st.me = Object.assign({ name: '' }, st.me || {});
   st.partner = Object.assign({}, d.settings.partner, st.partner || {});
