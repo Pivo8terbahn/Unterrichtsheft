@@ -733,6 +733,30 @@ function peekSetup(v) {
 window.addEventListener('scroll', () => { if (peekKey) peekHide(); }, { passive: true });
 document.addEventListener('pointerdown', e => { if (peekKey && !e.target.closest('.cell[data-lesson]') && !e.target.closest('.peek')) peekHide(); });
 
+// ----- Kopfzeilen beim Scrollen fixieren: Höhen messen, Titel beim Scrollen verkleinern -----
+let stickyRO = null;
+function stickyMeasure() {
+  const root = document.documentElement, tb = document.querySelector('.topbar'), wh = document.querySelector('.week-head');
+  const bar = document.querySelector('.ink-bar, .clip-bar');
+  root.style.setProperty('--tb-h', (tb ? tb.offsetHeight : 0) + 'px');
+  root.style.setProperty('--wh-h', (wh ? wh.offsetHeight : 0) + 'px');
+  root.style.setProperty('--bar-h', (bar ? bar.offsetHeight + 12 : 0) + 'px');
+}
+function stickyCompact() {
+  const wh = document.querySelector('.week-head');
+  if (!wh) return;
+  const y = window.scrollY, on = wh.classList.contains('compact');
+  if (!on && y > 90) { wh.classList.add('compact'); stickyMeasure(); }
+  else if (on && y < 30) { wh.classList.remove('compact'); stickyMeasure(); }
+}
+function stickySetup(v) {
+  stickyMeasure(); stickyCompact();
+  if (stickyRO) stickyRO.disconnect();
+  if (window.ResizeObserver) { stickyRO = new ResizeObserver(stickyMeasure); [document.querySelector('.topbar'), v.querySelector('.week-head')].forEach(x => x && stickyRO.observe(x)); }
+}
+window.addEventListener('scroll', () => { if (currentView === 'week') stickyCompact(); }, { passive: true });
+window.addEventListener('resize', () => { if (currentView === 'week') stickyMeasure(); });
+
 // ----- Zeilenhöhe mit der Maus oder dem Finger ziehen -----
 let rowDrag = null;
 function rowGripSetup(v) {
@@ -1128,6 +1152,7 @@ function renderWeek(v) {
   inkSetup(v, mk);
   rowGripSetup(v);
   peekSetup(v);
+  stickySetup(v);
   const pl = v.querySelector('.pages-list'), act = pl && pl.querySelector('.active');
   if (act) pl.scrollTop = act.offsetTop - pl.clientHeight / 3;
 

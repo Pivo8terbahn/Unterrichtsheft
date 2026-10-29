@@ -120,7 +120,7 @@ textarea { resize: vertical; line-height: 1.45; }
 
 .week-grid {
   display: grid; grid-template-columns: 62px repeat(var(--ndays, 5), minmax(0, 1fr));
-  border: 1px solid var(--ochre-line); border-radius: var(--radius); overflow: hidden; background: var(--cream); margin-bottom: 16px;
+  border: 1px solid var(--ochre-line); border-radius: var(--radius); overflow: hidden; overflow: clip; background: var(--cream); margin-bottom: 16px;
 }
 .times, .day { display: flex; flex-direction: column; min-width: 0; }
 .day { border-left: 1px solid var(--ochre-line); }
@@ -717,3 +717,16 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 .peek h5 { margin: 8px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7a6a33; }
 .peek-txt { white-space: pre-line; }
 @media print { .peek { display: none !important; } }
+
+/* Kopfzeilen der Wochenansicht beim Scrollen oben fixieren */
+:root { --tb-h: 0px; --wh-h: 0px; --bar-h: 0px; }
+.week-head { position: sticky; top: var(--tb-h); z-index: 15; }
+.week-head.compact .wh-band { display: none; }
+.week-head.compact .wh-title { padding-top: 6px; padding-bottom: 6px; }
+.week-head.compact .wh-title h1 { font-size: 22px; }
+.ink-bar, .clip-bar { top: calc(var(--tb-h) + var(--wh-h) + 6px); }
+.week-grid .day-head { position: sticky; top: calc(var(--tb-h) + var(--wh-h) + var(--bar-h)); z-index: 8; }
+@media print {
+  .week-head, .week-grid .day-head, .ink-bar, .clip-bar { position: static !important; }
+  .week-head.compact .wh-band { display: flex !important; }
+}
