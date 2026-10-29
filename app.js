@@ -528,7 +528,14 @@ function render() {
 // ----- Woche -----
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 // Zeilenhöhe im Verhältnis zur Lektionsdauer (45 Minuten = volle Höhe)
-const slotFactor = sl => { const m = mins(sl.to) - mins(sl.from); return m > 0 && m < 45 ? Math.max(0.5, m / 45).toFixed(3) : 1; };
+const slotBase = sl => { const m = mins(sl.to) - mins(sl.from); return m > 0 && m < 45 ? Math.max(0.5, m / 45) : 1; };
+// Zeilenhöhe pro Lektion: am unteren Rand ziehen vergrössert die ganze Zeile (pro Gerät gemerkt)
+let rowScale = (() => { try { return JSON.parse(localStorage.getItem('uh-rowscale') || '{}'); } catch { return {}; } })();
+function setRowScale(id, v) {
+  if (!v || v <= 1.02) delete rowScale[id]; else rowScale[id] = Math.min(6, +v.toFixed(2));
+  try { localStorage.setItem('uh-rowscale', JSON.stringify(rowScale)); } catch {}
+}
+const slotFactor = sl => (slotBase(sl) * (rowScale[sl.id] || 1)).toFixed(3);
 const slotIndex = id => state.settings.slots.findIndex(x => x.id === id);
 function lessonPlansIn(mk) {
   const end = iso(addDays(parse(mk), 6));
@@ -635,6 +642,64 @@ function mergeLessons(di, upperId, lowerId) {
   if (empty(A) && !empty(B)) { const keep = A.mergeNext; Object.assign(A, B); delete A.mergeNext; if (B.mergeNext) A.mergeNext = true; if (keep) A.mergeNext = true; }
   A.mergeNext = true;
   if (B && B.mergeNext) { /* Dreifachlektion: Verbindung nach unten bleibt bestehen */ }
+}
+
+// ----- Lektion kopieren und an anderer Stelle einfügen (Zwischenablage) -----
+let lessonClip = (() => { try { return JSON.parse(sessionStorage.getItem('uh-clip') || 'null'); } catch { return null; } })();
+function clipSave() { try { if (lessonClip) sessionStorage.setItem('uh-clip', JSON.stringify(lessonClip)); else sessionStorage.removeItem('uh-clip'); } catch {} }
+function copyLesson(key) {
+  const src = state.lessons[key];
+  if (!src) return;
+  const [di, sl] = key.split('|');
+  const data = JSON.parse(JSON.stringify(src));
+  delete data.mergeNext; delete data.who;
+  if (!data.subjectId) { const sid = state.settings.timetable[(dayIdx(di) + 1) + '-' + sl]; if (sid) data.subjectId = sid; }
+  const sub = subj(data.subjectId);
+  lessonClip = { from: key, data, label: (sub ? (sub.short || sub.name) + ': ' : '') + (data.title || 'Lektion') + ` (${DAYS[dayIdx(di)]} ${fmtShort(parse(di))})` };
+  clipSave();
+}
+function pasteClip(to) {
+  if (!lessonClip) return;
+  if (to === lessonClip.from) { openLesson(to); return; }
+  const cur = state.lessons[to];
+  if (cur && (cur.title || cur.flow || cur.goals || (cur.images || []).length || (cur.files || []).length)
+    && !confirm(`Diese Lektion enthält schon «${cur.title || 'Einträge'}». Mit «${lessonClip.label}» ersetzen?`)) return;
+  const data = JSON.parse(JSON.stringify(lessonClip.data));
+  if (cur && cur.mergeNext) data.mergeNext = true; // eine Doppellektion am Ziel bleibt verbunden
+  state.lessons[to] = data;
+  save(true); render();
+  const el = document.querySelector(`.cell[data-lesson="${CSS.escape(to)}"]`);
+  if (el) { el.classList.add('pasted'); setTimeout(() => el.classList.remove('pasted'), 900); }
+}
+// ----- Zeilenhöhe mit der Maus oder dem Finger ziehen -----
+let rowDrag = null;
+function rowGripSetup(v) {
+  v.querySelectorAll('[data-rowgrip]').forEach(g => {
+    g.addEventListener('dblclick', e => { e.stopPropagation(); setRowScale(g.dataset.rowgrip, 1); render(); });
+    g.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const id = g.dataset.rowgrip, sl = state.settings.slots.find(x => x.id === id);
+      if (!sl) return;
+      const grid = v.querySelector('.week-grid'), cellh = parseFloat(getComputedStyle(grid).getPropertyValue('--cellh')) || 92;
+      const line = document.createElement('div'); line.className = 'row-guide';
+      grid.appendChild(line);
+      const gTop = grid.getBoundingClientRect().top;
+      rowDrag = { id, y0: e.clientY, s0: rowScale[id] || 1, base: slotBase(sl) * cellh, line, gTop };
+      line.style.top = (e.clientY - gTop) + 'px';
+      const move = ev => {
+        if (!rowDrag) return;
+        line.style.top = (ev.clientY - grid.getBoundingClientRect().top) + 'px';
+      };
+      const up = ev => {
+        document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+        if (!rowDrag) return;
+        const d = rowDrag; rowDrag = null; d.line.remove();
+        const dy = ev.clientY - d.y0;
+        if (Math.abs(dy) > 3) { setRowScale(d.id, Math.max(1, d.s0 + dy / (d.base * d.s0 / d.s0))); render(); }
+      };
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+    });
+  });
 }
 
 function moveLesson(from, to) {
@@ -846,7 +911,7 @@ function renderWeek(v) {
   const title = holName ? esc(holName) : n ? `${sjLabel()} W-${n}` : 'ausserhalb Schuljahr';
 
   const timesCol = rows.map(r => {
-    if (r.type === 'slot') return `<div class="time" style="--f:${slotFactor(r.slot)}">${r.slot.from}</div>`;
+    if (r.type === 'slot') return `<div class="time" style="--f:${slotFactor(r.slot)}">${r.slot.from}<span class="row-grip no-print" data-rowgrip="${r.slot.id}" title="Ziehen, um die Zeile zu vergrössern; Doppelklick: zurücksetzen"></span></div>`;
     const prev = s.slots.find(x => 'p:' + x.id === r.pos);
     return `<div class="brk-time">${prev ? prev.to : ''}</div>`;
   }).join('');
@@ -890,6 +955,7 @@ function renderWeek(v) {
         ${les && (les.flow || '').trim() && !les.cancelled ? `<span class="cell-flow">${esc(les.flow.replace(/<[^>]+>/g, ' ').replace(/\n{2,}/g, '\n').trim())}</span>` : ''}
         ${les && les.homework ? `<span class="cell-ha">HA: ${esc(les.homework.split('\n')[0])}</span>` : ''}
         <span class="cell-icons">${chain ? `<span class="dbl-tag">${chain.length === 2 ? 'Doppellektion' : chain.length === 3 ? 'Dreifachlektion' : chain.length + '-fach'}</span>` : ''}${les && les.lk ? '<span class="lk-tag">LK</span>' : ''}${who !== 'me' && (sub || (les && les.title)) ? `<span class="who-tag">${who === 'both' ? 'Team' : esc(initials(partnerName()))}</span>` : ''}${isPlan ? '<span title="Lektionsplanung vorhanden">📝 Planung</span>' : ''}${nAtt ? `<span title="Anhänge">📎 ${nAtt}</span>` : ''}${les && les.reflection ? '<span title="Reflexion vorhanden">✎</span>' : ''}${les && les.cancelled ? '<span>fällt aus</span>' : ''}</span>
+        <span class="row-grip no-print" data-rowgrip="${(chain ? chain[chain.length - 1] : sl).id}" title="Ziehen, um die Zeile zu vergrössern; Doppelklick: zurücksetzen"></span>
       </div>`;
     };
     // Präsenzzeit direkt im Nachmittag des Tages: ersetzt die Nachmittagszeilen, Höhe bleibt gleich
@@ -974,10 +1040,12 @@ function renderWeek(v) {
     </div>
   </section>
   ${ink.on ? inkBarHTML(mk) : ''}
+  ${lessonClip ? `<div class="clip-bar no-print" role="status"><span>📋 <b>${esc(lessonClip.label)}</b> kopiert. Tippe auf eine Lektion, um sie dort einzufügen, auch in einer anderen Woche.</span><button type="button" class="btn small primary" data-clipclear>Fertig</button></div>` : ''}
   ${ttEmpty ? `<div class="notice no-print">Lege zuerst in den <button type="button" class="link" data-go="settings">Einstellungen</button> deinen Stundenplan fest. Danach erscheinen die Fächer automatisch in jeder Woche. Du kannst aber auch direkt in eine Lektion klicken und etwas eintragen.</div>` : ''}
   ${holName ? `<div class="notice holiday">${esc(holName)}: Diese Woche ist unterrichtsfrei.</div>` : ''}
   ${offNotes.length ? `<div class="off-notes">${offNotes.map(x => `<span class="off-chip ${x.type}">${x.type === 'feiertag' ? 'Feiertag ' : 'schulfrei '}${esc(x.label)}</span>`).join('')}</div>` : ''}
-  <section class="week-grid" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px;--tasksh:${(maxTasks + 1) * 26 + 8}px;--hwh:${(maxHw + 1) * 26 + 8}px">
+  ${Object.keys(rowScale).length ? '<p class="row-reset no-print"><button type="button" class="link" data-rowreset>Zeilenhöhen zurücksetzen</button></p>' : ''}
+  <section class="week-grid ${lessonClip ? 'clip-mode' : ''}" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px;--tasksh:${(maxTasks + 1) * 26 + 8}px;--hwh:${(maxHw + 1) * 26 + 8}px">
     <div class="times">
       <div class="day-head corner"></div>
       <div class="dtasks label" title="Notizen und Erledigungen pro Tag">🕘</div>
@@ -996,13 +1064,17 @@ function renderWeek(v) {
   autosizeAll(v);
   fitFlows(v);
   inkSetup(v, mk);
+  rowGripSetup(v);
   const pl = v.querySelector('.pages-list'), act = pl && pl.querySelector('.active');
   if (act) pl.scrollTop = act.offsetTop - pl.clientHeight / 3;
 
   v.onclick = e => {
-    const t = e.target.closest('[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-inkhl],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
+    const t = e.target.closest('[data-rowgrip],[data-rowreset],[data-clipclear],[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-inkhl],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
     if (!t) return;
     const ds = t.dataset;
+    if (ds.rowgrip) return;
+    if ('rowreset' in ds) { rowScale = {}; try { localStorage.removeItem('uh-rowscale'); } catch {} render(); return; }
+    if ('clipclear' in ds) { lessonClip = null; clipSave(); render(); return; }
     if (ds.pagetoggle) { pagesToggle(ds.pagetoggle); const pl = v.querySelector('.pages-list'), y = pl ? pl.scrollTop : 0; render(); const pl2 = v.querySelector('.pages-list'); if (pl2) pl2.scrollTop = y; return; }
     if (ds.pageweek) {
       // aktuelle Woche: Planungen ein- oder ausblenden; andere Woche: dorthin wechseln und Planungen zeigen
@@ -1033,7 +1105,7 @@ function renderWeek(v) {
     else if (ds.addbdg) { const [di, pos] = ds.addbdg.split('|'); openPicker(di, pos); }
     else if (ds.openplan) { currentMonday = monday(parse(ds.openplan.split('|')[0])); render(); openLesson(ds.openplan); }
     else if (ds.gotoweek) { currentMonday = parse(ds.gotoweek); render(); window.scrollTo(0, 0); }
-    else if (ds.lesson) openLesson(ds.lesson);
+    else if (ds.lesson) { if (lessonClip) pasteClip(ds.lesson); else openLesson(ds.lesson); }
     else if (ds.week !== undefined) {
       const k = Number(ds.week);
       currentMonday = k === 0 ? thisPlanningWeek() : addDays(currentMonday, 7 * k);
@@ -1045,6 +1117,7 @@ function renderWeek(v) {
   // Lektion per Drag-and-drop kopieren: Ziel wird überschrieben, Quelle bleibt
   let dragKey = null;
   v.ondragstart = e => {
+    if (rowDrag) { e.preventDefault(); return; }
     const c = e.target.closest('.cell[draggable="true"]');
     if (!c) return;
     dragKey = c.dataset.lesson;
@@ -1072,7 +1145,8 @@ function renderWeek(v) {
   v.onkeydown = e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-fixed]')) { e.preventDefault(); openFixedEdit(e.target.dataset.fixed); return; }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-pres]')) { e.preventDefault(); openPresEdit(e.target.dataset.pres); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-lesson]')) { e.preventDefault(); openLesson(e.target.dataset.lesson); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-lesson]')) { e.preventDefault(); if (lessonClip) pasteClip(e.target.dataset.lesson); else openLesson(e.target.dataset.lesson); }
+    if (e.key === 'Escape' && lessonClip) { lessonClip = null; clipSave(); render(); }
     if (e.key === 'Enter' && e.target.matches('[data-dtasknew],[data-dtask]')) { e.preventDefault(); e.target.blur(); }
   };
   v.onchange = e => {
@@ -1326,7 +1400,8 @@ function semesterEnd(di) {
 }
 // Bild oder Datei nur löschen, wenn keine andere Lektion sie noch verwendet
 async function releaseBlob(id, exceptKey) {
-  const used = Object.entries(state.lessons).some(([k, l]) => k !== exceptKey && ((l.images || []).includes(id) || (l.files || []).some(f => f.id === id)));
+  const inClip = lessonClip && ((lessonClip.data.images || []).includes(id) || (lessonClip.data.files || []).some(f => f.id === id));
+  const used = inClip || Object.entries(state.lessons).some(([k, l]) => k !== exceptKey && ((l.images || []).includes(id) || (l.files || []).some(f => f.id === id)));
   if (!used) await idbDel('images', id);
 }
 function repeatLesson(key, mode) {
@@ -1428,7 +1503,7 @@ function openLesson(key) {
         <p class="hint repeat-msg" aria-live="polite"></p>
       </section>
       <div class="panel-foot">
-        <span class="btn-row"><button type="button" class="btn danger small" data-clearlesson>Lektion leeren</button>${chainL.length > 1 ? '<button type="button" class="btn small" data-unmerge>Lektionen trennen</button>' : ''}</span>
+        <span class="btn-row"><button type="button" class="btn small" data-copylesson title="Lektion kopieren und an einer anderen Stelle einfügen">📋 Kopieren</button><button type="button" class="btn danger small" data-clearlesson>Lektion leeren</button>${chainL.length > 1 ? '<button type="button" class="btn small" data-unmerge>Lektionen trennen</button>' : ''}</span>
         <button class="btn primary" value="close">Fertig</button>
       </div>
     </div>
@@ -1484,6 +1559,9 @@ dlg.addEventListener('change', e => {
 });
 dlg.addEventListener('click', async e => {
   if (e.target === dlg) { dlg.close(); return; }
+  if (e.target.closest('[data-copylesson]') && openLessonKey) {
+    const k = openLessonKey; dlg.close(); copyLesson(k); render(); return;
+  }
   if (e.target.closest('[data-unmerge]') && openLessonKey) {
     const [di, sid] = openLessonKey.split('|');
     for (const x of slotChain(di, sid)) { const l = state.lessons[di + '|' + x.id]; if (l) delete l.mergeNext; }

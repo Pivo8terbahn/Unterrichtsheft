@@ -694,3 +694,16 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 @media (max-width: 1200px) { .fs-quick:not([hidden]) + .ts-col { display: none; } }
 .ink-layer.active.marker { cursor: text; }
 .ink-color.ink-hl { border-radius: 6px; width: 34px; }
+
+/* Zwischenablage für Lektionen */
+.clip-bar { position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 0 0 10px; padding: 8px 12px; background: #e8f1ff; border: 1px solid #9cc0f0; border-radius: 12px; box-shadow: var(--shadow); font-size: 14px; }
+.week-grid.clip-mode .cell[data-lesson] { cursor: copy; }
+.week-grid.clip-mode .cell[data-lesson]:hover { box-shadow: inset 4px 0 0 var(--c), inset 0 0 0 2px #2b6cb0; }
+.cell.pasted { animation: pasted .9s ease-out; }
+@keyframes pasted { from { background: #cfe3ff; } to { background: var(--cream); } }
+/* Zeilenhöhe ziehen */
+.time, .cell { position: relative; }
+.row-grip { position: absolute; left: 0; right: 0; bottom: -3px; height: 8px; cursor: ns-resize; z-index: 4; touch-action: none; }
+.row-grip:hover { background: linear-gradient(transparent 3px, rgba(191,144,0,.55) 3px, rgba(191,144,0,.55) 5px, transparent 5px); }
+.row-guide { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed var(--ochre); z-index: 30; pointer-events: none; }
+.row-reset { margin: -4px 0 6px; text-align: right; font-size: 13px; }
