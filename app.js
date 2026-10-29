@@ -671,6 +671,67 @@ function pasteClip(to) {
   const el = document.querySelector(`.cell[data-lesson="${CSS.escape(to)}"]`);
   if (el) { el.classList.add('pasted'); setTimeout(() => el.classList.remove('pasted'), 900); }
 }
+// ----- Schnellvorschau einer Lektion: Maus darüber oder lange drücken (iPad) -----
+let peekEl = null, peekTimer = null, peekKey = null, peekSuppressClick = false;
+function peekHTML(key) {
+  const l = state.lessons[key];
+  if (!l) return '';
+  const [di, sid] = key.split('|');
+  const chain = slotChain(di, sid), sl0 = chain[0], sl1 = chain[chain.length - 1];
+  const sub = subj(l.subjectId || state.settings.timetable[(dayIdx(di) + 1) + '-' + sid]);
+  const sec = (h, t) => (t || '').trim() ? `<h5>${h}</h5><div class="peek-txt">${esc(t.replace(/<[^>]+>/g, ' ').trim())}</div>` : '';
+  const nAtt = (l.images || []).length + (l.files || []).length;
+  if (!(l.title || l.flow || l.goals || l.material || l.homework || nAtt)) return '';
+  return `<div class="peek-head" style="--c:${sub ? sub.color : '#999'}">${sub ? `<b>${esc(sub.short || sub.name)}</b> ` : ''}${esc(l.title || 'Lektion')}</div>
+    <div class="peek-meta">${DAYS_LONG[dayIdx(di)]} ${fmtShort(parse(di))} · ${sl0 ? sl0.from : ''}–${sl1 ? sl1.to : ''}${chain.length > 1 ? ' · ' + (chain.length === 2 ? 'Doppellektion' : chain.length + '-fach') : ''}${l.lk ? ' · <span class="lk-tag">LK</span>' : ''}${l.cancelled ? ' · fällt aus' : ''}</div>
+    ${sec('Lernziele', l.goals)}${sec('Ablauf', l.flow)}${sec('Material', l.material)}${sec('Hausaufgaben', l.homework)}
+    ${nAtt ? `<div class="peek-meta">📎 ${nAtt} ${nAtt === 1 ? 'Anhang' : 'Anhänge'}</div>` : ''}`;
+}
+function peekShow(cell) {
+  const key = cell.dataset.lesson, html = peekHTML(key);
+  if (!html) return;
+  if (!peekEl) { peekEl = document.createElement('div'); peekEl.className = 'peek'; peekEl.setAttribute('role', 'tooltip'); document.body.appendChild(peekEl); }
+  peekEl.innerHTML = html; peekEl.hidden = false; peekKey = key;
+  const r = cell.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+  const pw = Math.min(380, W - 24); peekEl.style.width = pw + 'px';
+  const ph = peekEl.offsetHeight;
+  let x = r.right + 10; if (x + pw > W - 12) x = r.left - pw - 10; if (x < 12) x = Math.max(12, Math.min(W - pw - 12, r.left));
+  let y = r.top; if (y + ph > H - 12) y = Math.max(12, H - ph - 12);
+  if (x === r.left || (x < r.right && x + pw > r.left)) { y = r.bottom + 8; if (y + ph > H - 12) y = Math.max(12, r.top - ph - 8); }
+  peekEl.style.left = x + 'px'; peekEl.style.top = y + 'px';
+}
+function peekHide() { clearTimeout(peekTimer); peekTimer = null; peekKey = null; if (peekEl) peekEl.hidden = true; }
+function peekSetup(v) {
+  peekHide();
+  if (v.__peekBound) return; // #view bleibt bestehen, Listener nur einmal setzen
+  v.__peekBound = true;
+  const cellOf = e => { const c = e.target.closest && e.target.closest('.cell[data-lesson]'); return c && v.contains(c) ? c : null; };
+  v.addEventListener('pointerover', e => {
+    if (e.pointerType !== 'mouse' || ink.on || rowDrag) return;
+    const c = cellOf(e); if (!c || c.dataset.lesson === peekKey) return;
+    clearTimeout(peekTimer); peekTimer = setTimeout(() => peekShow(c), 450);
+  });
+  v.addEventListener('pointerout', e => {
+    if (e.pointerType !== 'mouse') return;
+    const c = cellOf(e); if (c && e.relatedTarget && c.contains(e.relatedTarget)) return;
+    peekHide();
+  });
+  // iPad: lange drücken zeigt die Vorschau, loslassen öffnet dann nicht die Lektion
+  let lp = null;
+  v.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || ink.on) { if (e.pointerType === 'mouse') peekHide(); return; }
+    const c = cellOf(e); if (!c) { peekHide(); return; }
+    if (peekKey && peekKey !== c.dataset.lesson) peekHide();
+    lp = { x: e.clientX, y: e.clientY, t: setTimeout(() => { peekShow(c); peekSuppressClick = !!peekKey; lp = null; }, 500) };
+  });
+  v.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) { clearTimeout(lp.t); lp = null; } });
+  v.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
+  v.addEventListener('click', e => { if (peekSuppressClick) { peekSuppressClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  v.addEventListener('contextmenu', e => { if (cellOf(e) && e.pointerType !== 'mouse' && peekKey) e.preventDefault(); });
+}
+window.addEventListener('scroll', () => { if (peekKey) peekHide(); }, { passive: true });
+document.addEventListener('pointerdown', e => { if (peekKey && !e.target.closest('.cell[data-lesson]') && !e.target.closest('.peek')) peekHide(); });
+
 // ----- Zeilenhöhe mit der Maus oder dem Finger ziehen -----
 let rowDrag = null;
 function rowGripSetup(v) {
@@ -1065,6 +1126,7 @@ function renderWeek(v) {
   fitFlows(v);
   inkSetup(v, mk);
   rowGripSetup(v);
+  peekSetup(v);
   const pl = v.querySelector('.pages-list'), act = pl && pl.querySelector('.active');
   if (act) pl.scrollTop = act.offsetTop - pl.clientHeight / 3;
 
@@ -1105,7 +1167,7 @@ function renderWeek(v) {
     else if (ds.addbdg) { const [di, pos] = ds.addbdg.split('|'); openPicker(di, pos); }
     else if (ds.openplan) { currentMonday = monday(parse(ds.openplan.split('|')[0])); render(); openLesson(ds.openplan); }
     else if (ds.gotoweek) { currentMonday = parse(ds.gotoweek); render(); window.scrollTo(0, 0); }
-    else if (ds.lesson) { if (lessonClip) pasteClip(ds.lesson); else openLesson(ds.lesson); }
+    else if (ds.lesson) { peekHide(); if (lessonClip) pasteClip(ds.lesson); else openLesson(ds.lesson); }
     else if (ds.week !== undefined) {
       const k = Number(ds.week);
       currentMonday = k === 0 ? thisPlanningWeek() : addDays(currentMonday, 7 * k);
@@ -1118,6 +1180,7 @@ function renderWeek(v) {
   let dragKey = null;
   v.ondragstart = e => {
     if (rowDrag) { e.preventDefault(); return; }
+    peekHide();
     const c = e.target.closest('.cell[draggable="true"]');
     if (!c) return;
     dragKey = c.dataset.lesson;

@@ -707,3 +707,13 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 .row-grip:hover { background: linear-gradient(transparent 3px, rgba(191,144,0,.55) 3px, rgba(191,144,0,.55) 5px, transparent 5px); }
 .row-guide { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed var(--ochre); z-index: 30; pointer-events: none; }
 .row-reset { margin: -4px 0 6px; text-align: right; font-size: 13px; }
+
+/* Schnellvorschau einer Lektion */
+.peek { position: fixed; z-index: 200; max-height: calc(100vh - 24px); overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,.22); padding: 12px 14px; font-size: 13px; line-height: 1.45; pointer-events: auto; }
+.peek[hidden] { display: none; }
+.peek-head { font-size: 15px; font-weight: 700; padding-left: 9px; border-left: 4px solid var(--c); margin-bottom: 2px; }
+.peek-head b { color: color-mix(in srgb, var(--c) 75%, #000); }
+.peek-meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.peek h5 { margin: 8px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7a6a33; }
+.peek-txt { white-space: pre-line; }
+@media print { .peek { display: none !important; } }
