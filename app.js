@@ -667,6 +667,7 @@ function pasteClip(to) {
   const data = JSON.parse(JSON.stringify(lessonClip.data));
   if (cur && cur.mergeNext) data.mergeNext = true; // eine Doppellektion am Ziel bleibt verbunden
   state.lessons[to] = data;
+  lessonClip = null; clipSave(); // nach dem Einfügen zurück in den normalen Modus
   save(true); render();
   const el = document.querySelector(`.cell[data-lesson="${CSS.escape(to)}"]`);
   if (el) { el.classList.add('pasted'); setTimeout(() => el.classList.remove('pasted'), 900); }
@@ -1101,7 +1102,7 @@ function renderWeek(v) {
     </div>
   </section>
   ${ink.on ? inkBarHTML(mk) : ''}
-  ${lessonClip ? `<div class="clip-bar no-print" role="status"><span>📋 <b>${esc(lessonClip.label)}</b> kopiert. Tippe auf eine Lektion, um sie dort einzufügen, auch in einer anderen Woche.</span><button type="button" class="btn small primary" data-clipclear>Fertig</button></div>` : ''}
+  ${lessonClip ? `<div class="clip-bar no-print" role="status"><span>📋 <b>${esc(lessonClip.label)}</b> kopiert. Tippe auf die Lektion, in die du sie einfügen willst, auch in einer anderen Woche.</span><button type="button" class="btn small" data-clipclear>Abbrechen</button></div>` : ''}
   ${ttEmpty ? `<div class="notice no-print">Lege zuerst in den <button type="button" class="link" data-go="settings">Einstellungen</button> deinen Stundenplan fest. Danach erscheinen die Fächer automatisch in jeder Woche. Du kannst aber auch direkt in eine Lektion klicken und etwas eintragen.</div>` : ''}
   ${holName ? `<div class="notice holiday">${esc(holName)}: Diese Woche ist unterrichtsfrei.</div>` : ''}
   ${offNotes.length ? `<div class="off-notes">${offNotes.map(x => `<span class="off-chip ${x.type}">${x.type === 'feiertag' ? 'Feiertag ' : 'schulfrei '}${esc(x.label)}</span>`).join('')}</div>` : ''}
