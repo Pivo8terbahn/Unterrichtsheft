@@ -73,12 +73,12 @@ function defaultBadges() {
     ['ZAZ/IP', 'bilder/zaz-ip.jpg']
   ].map(([name, src]) => ({ id: uid(), name, src }));
 }
-const SHORTS = { 'Deutsch': 'D', 'Mathematik': 'M', 'NMG': 'NMG', 'Englisch': 'E', 'TTG': 'TG', 'TG': 'TG', 'Musik': 'MU', 'Medien und Informatik': 'MI', 'Bildnerisches Gestalten': 'BG', 'Bewegung und Sport': 'BS' };
+const SHORTS = { 'Deutsch': 'D', 'Mathematik': 'M', 'NMG': 'NMG', 'Englisch': 'E', 'TTG': 'TG', 'TG': 'TG', 'Musik': 'MU', 'Medien und Informatik': 'MI', 'Bildnerisches Gestalten': 'BG', 'Bewegung und Sport': 'BS', 'Schulhaus-Events': 'SH-E' };
 const shortFor = name => SHORTS[name] || String(name || '').slice(0, 3);
 // Fach am Anfang einer Hausaufgabe erkennen, z. B. «E: Wörter lernen» → Englisch
 const HA_ALIASES = { MA: 'Mathematik', DE: 'Deutsch', EN: 'Englisch', ENG: 'Englisch', MU: 'Musik', TTG: 'TTG', TG: 'TTG', MI: 'Medien und Informatik' };
 function haSubject(text) {
-  const m = /^\s*([A-Za-zÄÖÜäöü&]{1,12})\s*:/.exec(text || '');
+  const m = /^\s*([A-Za-zÄÖÜäöü&-]{1,12})\s*:/.exec(text || '');
   if (!m) return null;
   const k = m[1].toLowerCase(), subs = state.settings.subjects;
   return subs.find(x => (x.short || '').toLowerCase() === k) || subs.find(x => x.name.toLowerCase() === k)
@@ -93,7 +93,7 @@ function defaults() {
   const subjects = [
     ['Deutsch', '#d93b3b'], ['Mathematik', '#2f6fd6'], ['NMG', '#2e9b57'], ['Englisch', '#d6a300'],
     ['TTG', '#e57c23'], ['Musik', '#159e9e'], ['Medien und Informatik', '#7b5cd6'],
-    ['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f']
+    ['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f'], ['Schulhaus-Events', '#8a5a2b']
   ].map(([name, color]) => ({ id: uid(), name, short: shortFor(name), color }));
   const slots = DEFAULT_SLOTS.map(([from, to]) => ({ id: uid(), from, to }));
   return {
@@ -157,6 +157,11 @@ function migrate(s) {
     for (const [name, color] of [['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f']])
       if (!out.settings.subjects.some(x => x.name === name || x.short === SHORTS[name])) out.settings.subjects.push({ id: uid(), name, short: SHORTS[name], color });
     out.imports.subjBGBS = true;
+  }
+  // Fach für Anlässe mit dem ganzen Schulhausteam oder anderen Klassen, einmalig ergänzen
+  if (!out.imports.subjSHE && out.settings && out.settings.subjects) {
+    if (!out.settings.subjects.some(x => x.name === 'Schulhaus-Events' || x.short === 'SH-E')) out.settings.subjects.push({ id: uid(), name: 'Schulhaus-Events', short: 'SH-E', color: '#8a5a2b' });
+    out.imports.subjSHE = true;
   }
   if (!out.fixed) out.fixed = typeof SWIM_2627 !== 'undefined' ? SWIM_2627.map(x => ({ ...x })) : [];
   st.me = Object.assign({ name: '' }, st.me || {});
