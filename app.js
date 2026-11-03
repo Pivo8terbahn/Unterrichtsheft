@@ -1926,6 +1926,28 @@ function stoffCols() {
   return cols;
 }
 // ----- Jahresplanung: Ferien und Feiertage (Ferienplan Kanton Zug plus eigene Einträge) -----
+const DAYS_LONG7 = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+function easterSunday(y) {
+  // Gausssche Osterformel (gregorianischer Kalender)
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day);
+}
+// Feiertage im Kanton Zug zwischen zwei Daten (kind: 'legal' gesetzlich, 'school' schulfrei laut Ferienplan, 'custom' üblich arbeitsfrei)
+function zugHolidays(from, to) {
+  const out = [], y0 = parse(from).getFullYear(), y1 = parse(to).getFullYear();
+  for (let y = y0; y <= y1; y++) {
+    const E = easterSunday(y), ed = n => iso(addDays(E, n)), fix = (m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    out.push({ d: fix(1, 1), n: 'Neujahr', kind: 'legal' }, { d: fix(1, 2), n: 'Berchtoldstag', kind: 'custom' },
+      { d: ed(-2), n: 'Karfreitag', kind: 'legal' }, { d: ed(1), n: 'Ostermontag', kind: 'school' },
+      { d: ed(39), n: 'Auffahrt', kind: 'legal' }, { d: ed(50), n: 'Pfingstmontag', kind: 'school' }, { d: ed(60), n: 'Fronleichnam', kind: 'legal' },
+      { d: fix(8, 1), n: 'Bundesfeiertag', kind: 'legal' }, { d: fix(8, 15), n: 'Mariä Himmelfahrt', kind: 'legal' },
+      { d: fix(11, 1), n: 'Allerheiligen', kind: 'legal' }, { d: fix(12, 8), n: 'Mariä Empfängnis', kind: 'legal' },
+      { d: fix(12, 25), n: 'Weihnachten', kind: 'legal' }, { d: fix(12, 26), n: 'Stephanstag', kind: 'custom' });
+  }
+  return out.filter(x => x.d >= from && x.d <= to);
+}
 let holYear = null;
 function renderHolidays(v) {
   const st = state.settings, years = Object.keys(ZG_CALENDAR);
@@ -1942,8 +1964,13 @@ function renderHolidays(v) {
   if (next) ferien.push({ n: 'Sommerferien', a: c.summer, b: iso(addDays(parse(next.start), -1)) });
   else ferien.push({ n: 'Sommerferien (ab)', a: c.summer, b: c.summer });
   const own = y === st.calendarYear;
-  const extra = own ? Object.entries(st.extraOff || {}).filter(([d]) => d >= c.start && d < c.summer).map(([d, n]) => ({ d, n, local: true })) : [];
-  const feier = c.feiertage.map(([n, d]) => ({ d, n })).concat(extra).sort((a, b) => a.d.localeCompare(b.d));
+  // Alle Feiertage im Schuljahr (bis zum Ende der Sommerferien), mit Wochentag und Vermerk «in den Ferien»
+  const yEnd = next ? iso(addDays(parse(next.start), -1)) : iso(addDays(parse(c.summer), 42));
+  const extra = own ? Object.entries(st.extraOff || {}).filter(([d]) => d >= c.start && d <= yEnd).map(([d, n]) => ({ d, n, kind: 'local' })) : [];
+  const feier = zugHolidays(c.start, yEnd).concat(extra).sort((a, b) => a.d.localeCompare(b.d)).map(f => {
+    const fer = ferien.find(x => f.d >= x.a && f.d <= x.b), wd = parse(f.d).getDay();
+    return { ...f, fer: fer ? fer.n : '', weekend: wd === 0 || wd === 6 };
+  });
   const manual = own ? Object.entries(st.holidays || {}).sort().map(([mk, n]) => ({ mk, n })) : [];
   const nextFer = ferien.find(f => f.a > today), curFer = ferien.find(f => f.a <= today && f.b >= today);
   const nextFt = feier.find(f => f.d >= today);
@@ -1969,10 +1996,11 @@ function renderHolidays(v) {
     </section>
     <section class="card">
       <h2>Feiertage und schulfreie Tage</h2>
-      <table class="hol-table"><thead><tr><th>Datum</th><th>Anlass</th><th></th></tr></thead><tbody>
-        ${feier.map(f => `<tr class="hs-${status(f.d, f.d)}"><td>${dLong(f.d)}</td><td><b>${esc(f.n)}</b></td><td class="muted">${f.local ? 'schulfrei Stadt Zug' : 'Feiertag'}</td></tr>`).join('')}
+      <table class="hol-table"><thead><tr><th>Wochentag</th><th>Datum</th><th>Feiertag</th><th>Vermerk</th></tr></thead><tbody>
+        ${feier.map(f => `<tr class="hs-${status(f.d, f.d)} ${f.fer ? 'in-fer' : f.weekend ? 'in-we' : 'on-school'}"><td><b>${DAYS_LONG7[parse(f.d).getDay()]}</b></td><td>${fmtShort(parse(f.d))}${parse(f.d).getFullYear()}</td><td><b>${esc(f.n)}</b>${f.kind === 'local' ? ' <small class="muted">(Stadt Zug)</small>' : f.kind === 'custom' ? ' <small class="muted">(üblich arbeitsfrei)</small>' : ''}</td>
+          <td>${f.fer ? `<span class="fv fv-fer">in den ${esc(f.fer)}</span>` : f.weekend ? '<span class="fv fv-we">Wochenende</span>' : '<span class="fv fv-free">schulfrei</span>'}</td></tr>`).join('')}
       </tbody></table>
-      <p class="hint">Aufgeführt sind die schulfreien Feiertage an Schultagen gemäss Ferienplan sowie eigene schulfreie Tage.</p>
+      <p class="hint">Gesetzliche Feiertage und öffentliche Ruhetage im Kanton Zug gemäss Ruhetags- und Ladenöffnungsgesetz (BGS 942.31), dazu Ostermontag und Pfingstmontag (schulfrei gemäss Ferienplan), Berchtoldstag und Stephanstag (üblich arbeitsfrei) sowie eigene schulfreie Tage.</p>
     </section>
   </div>
   <p class="hint">Quelle: «Schulferien 2026/27 bis 2030/31», Amt für gemeindliche Schulen Kanton Zug, 28. Mai 2026. Eigene schulfreie Tage und Ferienwochen stammen aus deinen Einstellungen bzw. der Spalte «Themen pro Woche».</p>`;

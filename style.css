@@ -791,3 +791,9 @@ table.review thead th small.rv-tot { display: block; font-weight: 400; font-size
 .hol-table tr.hs-now td { background: #fff3c4; }
 .hol-list { margin: 6px 0 0 18px; padding: 0; font-size: 14px; }
 .card h3 { font-size: 14px; margin: 14px 0 4px; }
+
+.fv { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.fv-fer { background: #e3e8f0; color: #3d4d66; }
+.fv-we { background: #efefef; color: #666; }
+.fv-free { background: #dff1e5; color: #1f6b3a; font-weight: 600; }
+.hol-table tr.on-school td:first-child b { color: #1f6b3a; }
