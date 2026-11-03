@@ -807,3 +807,12 @@ table.review thead th small.rv-tot { display: block; font-weight: 400; font-size
 .ag-eltern { --t: #d9467a; } .ag-orient { --t: #0f8a8a; }
 .ev.ag-eltern, .ev.ag-orient { box-shadow: inset 4px 0 0 var(--t); padding-left: 10px !important; }
 .day-ev.ev-eltern, .day-ev.ev-orient { background: var(--ek); color: #fff; border-color: var(--ek); }
+
+/* Zeile nach Schulschluss */
+.late-cell { height: var(--lateh, 40px); display: flex; flex-direction: column; gap: 3px; padding: 5px 6px; background: #f4f1e8; border-top: 2px solid var(--ochre-line); cursor: pointer; position: relative; overflow: hidden; }
+.late-cell:hover { background: #fbf7ea; }
+.day.off .late-cell { cursor: default; }
+.late-time { height: var(--lateh, 40px); border-top: 2px solid var(--ochre-line); background: #f4f1e8; font-size: 12px !important; line-height: 1.2; }
+.late-ev { font-size: 12px; background: var(--ek); color: #fff; border-radius: 5px; padding: 2px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.late-plus { position: absolute; right: 6px; bottom: 3px; color: #b5a26a; font-size: 16px; opacity: 0; }
+.late-cell:hover .late-plus { opacity: 1; }

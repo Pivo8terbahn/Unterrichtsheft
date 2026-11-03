@@ -577,18 +577,56 @@ function pagesHTML() {
   }).join('');
 }
 
+// ----- Nach Schulschluss (ab 16.15 Uhr): Elterngespräche und andere Termine in einer eigenen Zeile -----
+const LATE_FROM = '16:15';
+const isLate = t => /^\d{1,2}:\d{2}/.test(t || '') && mins(t.slice(0, 5)) >= mins(LATE_FROM);
+function lateItems(di) {
+  const ev = (state.events || []).filter(e => e.date === di && isLate(e.time)).map(e => ({ time: e.time.slice(0, 5), title: e.title, note: e.note, color: EV_KINDS[evKind(e)].color, kind: evKind(e) !== 'termin' ? EV_KINDS[evKind(e)].label : '', ev: e.id }));
+  const mt = (state.meetings || []).filter(m => m.date === di && !m.presId && isLate(m.time)).map(m => ({ time: m.time.slice(0, 5), title: cwGroup(m.group).name + (m.title ? ': ' + m.title : ''), color: cwGroup(m.group).color, cw: m.id }));
+  return ev.concat(mt).sort((a, b) => a.time.localeCompare(b.time));
+}
+function lateHTML(di, off) {
+  const items = lateItems(di);
+  return `<div class="late-cell" data-lateadd="${di}" title="Termin nach Schulschluss hinzufügen">
+    ${items.map(x => `<span class="late-ev" role="button" tabindex="0" ${x.cw ? `data-cwopen="${x.cw}"` : `data-lateev="${x.ev}"`} style="--ek:${x.color}" title="${esc((x.kind ? x.kind + ': ' : '') + x.title + (x.note ? ' · ' + x.note : ''))}"><b>${x.time.replace(':', '.')}</b> ${esc(x.kind && x.title === x.kind ? x.kind : x.title)}</span>`).join('')}
+    ${off ? '' : '<span class="late-plus no-print" aria-hidden="true">+</span>'}
+  </div>`;
+}
+function openLateEdit(di, evId) {
+  const e = evId ? state.events.find(x => x.id === evId) : null;
+  pickCtx = { lateDi: di, lateEv: evId || null };
+  pick.innerHTML = `<form method="dialog" class="pick">
+    <h2>${e ? 'Termin bearbeiten' : 'Termin nach Schulschluss'}</h2>
+    <p class="muted">${DAYS_LONG[dayIdx(di)]} ${fmtShort(parse(di))}${parse(di).getFullYear()}</p>
+    <div class="form-row col" style="margin-top:10px">
+      <div class="form-row">
+        <label class="field"><span>Art</span><select name="lkind">${Object.entries(EV_KINDS).map(([k, x]) => `<option value="${k}" ${(e ? evKind(e) : lastEvKind) === k ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
+        <label class="field narrow"><span>Zeit</span><input type="time" step="300" min="${LATE_FROM}" name="ltime" value="${e ? e.time : '16:30'}"></label>
+      </div>
+      <label class="field"><span>Titel</span><input name="ltitle" value="${esc(e ? e.title : '')}" placeholder="z. B. Familie, Anlass"></label>
+      <label class="field"><span>Notiz</span><input name="lnote" value="${esc(e ? e.note || '' : '')}" placeholder="optional"></label>
+    </div>
+    <div class="pick-foot">
+      <span class="btn-row">${e ? '<button type="button" class="btn danger small" data-latedel>Löschen</button>' : ''}</span>
+      <span class="btn-row"><button class="btn" value="cancel">Abbrechen</button><button type="button" class="btn primary" data-latesave>Speichern</button></span>
+    </div>
+  </form>`;
+  pick.showModal();
+  pick.querySelector(e ? '[name=ltitle]' : '[name=ltime]').focus();
+}
+
 // Termine, die einen Präsenznachmittag belegen: { from, to (Minuten), title, sub, color, id }
 function presOverrides(di) {
   const out = [], hm = x => /^\d{1,2}:\d{2}/.test(x || '') ? mins(x.slice(0, 5)) : null;
   for (const m of state.meetings || []) {
-    if (m.presId || m.date !== di) continue;
+    if (m.presId || m.date !== di || isLate(m.time)) continue;
     const g = cwGroup(m.group), f = hm(m.time), t = hm(m.end);
     const from = f ?? mins('13:30'), to = t ?? (f !== null ? f + 60 : mins('16:30'));
     out.push({ from, to, title: g.name, sub: m.title || '', color: g.color, meeting: m.id, label: f !== null ? `${m.time.slice(0, 5).replace(':', '.')}${m.end ? '–' + m.end.slice(0, 5).replace(':', '.') : ''} Uhr` : 'Nachmittag' });
   }
   for (const e of state.events || []) {
     if (e.date !== di) continue;
-    const f = hm(e.time); if (f === null) continue;
+    const f = hm(e.time); if (f === null || isLate(e.time)) continue;
     out.push({ from: f, to: f + 60, title: e.title, sub: e.note || '', color: '#5a6270', label: e.time.slice(0, 5).replace(':', '.') + ' Uhr' });
   }
   return out;
@@ -1008,14 +1046,14 @@ function renderWeek(v) {
   }).join('');
 
   let cols = '';
-  let headExtra = 0, chipRow = false, maxTasks = 0, maxHw = 0; // Höhe von Kopf- und Notizzeile nach Inhalt
+  let headExtra = 0, chipRow = false, maxTasks = 0, maxHw = 0, maxLate = 0; // Höhe von Kopf- und Notizzeile nach Inhalt
   const myDays = [0, 1, 2, 3, 4].filter(d => iTeachOn(d + 1));
   const hideOther = !!state.settings.hideOtherDays && myDays.length > 0;
   const shownDays = hideOther ? myDays : [0, 1, 2, 3, 4];
   const midDay = shownDays[Math.floor(shownDays.length / 2)];
   for (const d of shownDays) {
     const date = addDays(mon, d), di = iso(date);
-    const dayEvs = state.events.filter(e => e.date === di);
+    const dayEvs = state.events.filter(e => e.date === di && !isLate(e.time));
     const dt = state.dayTasks[di] || [];
     const rowHTML = (r, span) => {
       if (r.type === 'break') {
@@ -1072,12 +1110,13 @@ function renderWeek(v) {
       : buildRows(rows);
     const owner = dayOwner(d + 1);
     const off = offDay(di);
-    const dayMeet = (state.meetings || []).filter(m => m.date === di && !m.presId);
+    const dayMeet = (state.meetings || []).filter(m => m.date === di && !m.presId && !isLate(m.time));
     const dayBadges = badgeHTML(di, 'tag') + dayEvs.map(e => `<span class="day-ev ev-${evKind(e)}" style="--ek:${EV_KINDS[evKind(e)].color}" title="${esc((evKind(e) !== 'termin' ? EV_KINDS[evKind(e)].label + ': ' : '') + e.title)}">${e.time ? e.time + ' ' : ''}${esc(e.title)}</span>`).join('')
       + dayMeet.map(m => `<span class="day-ev cw" role="button" data-cwopen="${m.id}" style="--gc:${cwGroup(m.group).color}" title="${esc(cwGroup(m.group).name)}: ${esc(m.title || '')}">${m.time ? esc(m.time) + ' ' : ''}${esc(cwGroup(m.group).name)}</span>`).join('');
     if (dayBadges) headExtra = 1;
     if (off || owner === 'partner') chipRow = true;
     maxTasks = Math.max(maxTasks, (state.dayTasks[di] || []).length);
+    maxLate = Math.max(maxLate, lateItems(di).length);
     const hw = state.dayHomework[di] || [];
     maxHw = Math.max(maxHw, hw.length);
     const fixedEv = fixedHTML(di);
@@ -1097,7 +1136,8 @@ function renderWeek(v) {
         <label class="dtask new"><input type="checkbox" disabled aria-hidden="true"><input class="dtask-text" data-list="dayHomework" data-dtasknew="${di}" placeholder="${hw.length ? '' : 'HA auf diesen Tag'}" aria-label="Neue Hausaufgabe auf ${DAYS_LONG[d]}"></label>
       </div>
       ${fixedEv}
-      ${body}</div>`;
+      ${body}
+      ${lateHTML(di, off)}</div>`;
   }
 
   v.innerHTML = `
@@ -1136,12 +1176,13 @@ function renderWeek(v) {
   ${holName ? `<div class="notice holiday">${esc(holName)}: Diese Woche ist unterrichtsfrei.</div>` : ''}
   ${offNotes.length ? `<div class="off-notes">${offNotes.map(x => `<span class="off-chip ${x.type}">${x.type === 'feiertag' ? 'Feiertag ' : 'schulfrei '}${esc(x.label)}</span>`).join('')}</div>` : ''}
   ${Object.keys(rowScale).length ? '<p class="row-reset no-print"><button type="button" class="link" data-rowreset>Zeilenhöhen zurücksetzen</button></p>' : ''}
-  <section class="week-grid ${lessonClip ? 'clip-mode' : ''}" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px;--tasksh:${(maxTasks + 1) * 26 + 8}px;--hwh:${(maxHw + 1) * 26 + 8}px">
+  <section class="week-grid ${lessonClip ? 'clip-mode' : ''}" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px;--tasksh:${(maxTasks + 1) * 26 + 8}px;--hwh:${(maxHw + 1) * 26 + 8}px;--lateh:${Math.max(40, maxLate * 26 + 14)}px">
     <div class="times">
       <div class="day-head corner"></div>
       <div class="dtasks label" title="Notizen und Erledigungen pro Tag">🕘</div>
       <div class="dtasks dhw label" title="Hausaufgaben, die auf diesen Tag zu lösen sind">HA</div>
       ${timesCol}
+      <div class="time late-time" title="Termine nach Schulschluss">ab ${LATE_FROM.replace(':', '.')}</div>
     </div>
     ${cols}
   </section>
@@ -1162,9 +1203,11 @@ function renderWeek(v) {
   if (act) pl.scrollTop = act.offsetTop - pl.clientHeight / 3;
 
   v.onclick = e => {
-    const t = e.target.closest('[data-rowgrip],[data-rowreset],[data-clipclear],[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-inkhl],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
+    const t = e.target.closest('[data-lateev],[data-lateadd],[data-rowgrip],[data-rowreset],[data-clipclear],[data-pagetoggle],[data-inkbtn],[data-inkcolor],[data-inkw],[data-inkhl],[data-undo],[data-gameroll],[data-merge],[data-split],[data-fixed],[data-pres],[data-cwopen],[data-place],[data-addbdg],[data-openplan],[data-gotoweek],[data-lesson],[data-week],[data-print],[data-go],[data-deltodo]');
     if (!t) return;
     const ds = t.dataset;
+    if (ds.lateev) { openLateEdit(t.closest('[data-lateadd]').dataset.lateadd, ds.lateev); return; }
+    if (ds.lateadd) { if (!t.closest('.day.off')) openLateEdit(ds.lateadd); return; }
     if (ds.rowgrip) return;
     if ('rowreset' in ds) { rowScale = {}; try { localStorage.removeItem('uh-rowscale'); } catch {} render(); return; }
     if ('clipclear' in ds) { lessonClip = null; clipSave(); render(); return; }
@@ -1418,6 +1461,23 @@ pick.addEventListener('click', e => {
       if (del.dataset.fxdel === 'all') { if (!confirm(`Alle Einträge «${x.title}» löschen?`)) return; state.fixed = state.fixed.filter(f => f.title !== x.title); }
       else state.fixed = state.fixed.filter(f => f.id !== x.id);
       save(); pick.close(); return;
+    }
+  }
+  if (pickCtx && pickCtx.lateDi) {
+    const q = n => pick.querySelector(`[name=${n}]`).value;
+    if (e.target.closest('[data-latesave]')) {
+      let time = q('ltime') || '16:30'; if (mins(time) < mins(LATE_FROM)) time = LATE_FROM;
+      const kind = q('lkind'); lastEvKind = kind;
+      const title = q('ltitle').trim() || (kind !== 'termin' ? EV_KINDS[kind].label : 'Termin');
+      const data = { date: pickCtx.lateDi, time, title, note: q('lnote').trim() };
+      const ex = pickCtx.lateEv && state.events.find(x => x.id === pickCtx.lateEv);
+      if (ex) { Object.assign(ex, data); if (kind !== 'termin') ex.kind = kind; else delete ex.kind; }
+      else state.events.push({ id: uid(), ...data, ...(kind !== 'termin' ? { kind } : {}) });
+      save(); pick.close(); return;
+    }
+    if (e.target.closest('[data-latedel]')) {
+      if (!confirm('Diesen Termin löschen?')) return;
+      state.events = state.events.filter(x => x.id !== pickCtx.lateEv); save(); pick.close(); return;
     }
   }
   if (pickCtx && pickCtx.presId) {
