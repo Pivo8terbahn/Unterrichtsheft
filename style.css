@@ -816,3 +816,6 @@ table.review thead th small.rv-tot { display: block; font-weight: 400; font-size
 .late-ev { font-size: 12px; background: var(--ek); color: #fff; border-radius: 5px; padding: 2px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .late-plus { position: absolute; right: 6px; bottom: 3px; color: #b5a26a; font-size: 16px; opacity: 0; }
 .late-cell:hover .late-plus { opacity: 1; }
+
+select.ag-kind { appearance: none; -webkit-appearance: none; field-sizing: content; cursor: pointer; font-family: inherit; padding-right: 16px; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 8px) 55%, calc(100% - 4px) 55%; background-size: 4px 4px; background-repeat: no-repeat; background-color: var(--t); }
+select.ag-kind option { color: #222; background: #fff; text-transform: none; font-weight: 400; letter-spacing: 0; }

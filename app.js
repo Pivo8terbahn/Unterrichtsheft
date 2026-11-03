@@ -2369,7 +2369,9 @@ function renderAgenda(v) {
   const evLi = e => `<li class="ev ag-${e.type}" ${e.color ? `style="--t:${e.color};--tf:${e.fg || '#fff'}"` : ''}>
       <div class="ev-when"><b>${dLabel(e.date)}</b>${e.to ? `<small>bis ${dLabel(e.to)}</small>` : ''}${e.timeLabel ? `<small>${esc(e.timeLabel)}</small>` : e.time ? `<small>${e.time}</small>` : ''}</div>
       ${e.icon ? `<img class="ag-icon" src="${e.icon}" alt="">` : e.badgeImg ? `<span class="ag-icon">${e.badgeImg}</span>` : ''}
-      <div class="ev-what"><span class="ag-type">${esc(e.label || label[e.type])}</span> ${e.pres ? `<button type="button" class="link ag-title" data-pres="${e.pres}"><strong>${esc(e.title)}</strong></button>` : `<strong>${esc(e.title)}</strong>`}${e.note ? `<p>${esc(e.note)}</p>` : ''}</div>
+      <div class="ev-what">${['termin', 'eltern', 'orient'].includes(e.type) && e.id
+        ? `<select class="ag-type ag-kind" data-evkind="${e.id}" aria-label="Kennzeichnung des Termins" title="Kennzeichnung ändern">${Object.entries(EV_KINDS).map(([k, x]) => `<option value="${k}" ${e.type === k ? 'selected' : ''}>${x.label}</option>`).join('')}</select>`
+        : `<span class="ag-type">${esc(e.label || label[e.type])}</span>`} ${e.pres ? `<button type="button" class="link ag-title" data-pres="${e.pres}"><strong>${esc(e.title)}</strong></button>` : `<strong>${esc(e.title)}</strong>`}${e.note ? `<p>${esc(e.note)}</p>` : ''}</div>
       ${e.meeting ? `<button type="button" class="icon-btn" data-cwopen="${e.meeting}" aria-label="Im CoWork öffnen" title="Im CoWork öffnen">✎</button>` : ''}
       <button type="button" class="icon-btn" data-gotoweek="${iso(monday([0, 6].includes(parse(e.date).getDay()) ? addDays(parse(e.date), 2) : parse(e.date)))}" aria-label="Woche öffnen" title="Woche öffnen">→</button>
       ${['termin', 'eltern', 'orient'].includes(e.type) ? `<button type="button" class="icon-btn" data-delev="${e.id}" aria-label="Termin löschen">✕</button>` : ''}</li>`;
@@ -2469,6 +2471,11 @@ function renderAgenda(v) {
   };
   v.onchange = e => {
     if (e.target.dataset.shop) { const x = state.shopping.find(y => y.id === e.target.dataset.shop); if (x) { x.done = e.target.checked; save(); render(); } return; }
+    if (e.target.dataset.evkind) {
+      const ev = state.events.find(x => x.id === e.target.dataset.evkind);
+      if (ev) { if (e.target.value === 'termin') delete ev.kind; else ev.kind = e.target.value; save(); render(); }
+      return;
+    }
     if (e.target.dataset.todogroup) { const t = state.todos.find(x => x.id === e.target.dataset.todogroup); if (t) { t.group = e.target.value; save(); render(); } return; }
     if (e.target.dataset.agf) { const k = e.target.dataset.agf; if (e.target.checked) agendaFilter.add(k); else agendaFilter.delete(k); render(); return; }
     const id = e.target.dataset.todo;
