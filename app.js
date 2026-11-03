@@ -1925,10 +1925,87 @@ function stoffCols() {
   cols.push({ key: 'over', label: 'Übergreifender Unterricht', who: '', color: '#9aa0a6' });
   return cols;
 }
+// ----- Jahresplanung: Lektionen im Überblick (geplant und durchgeführt, aus den Themen der Lektionen) -----
+let reviewWho = 'all';
+function renderReview(v) {
+  const s = state.settings, today = iso(new Date()), nowKey = iso(thisPlanningWeek());
+  // Lektionen pro Woche und Fach sammeln
+  const byWeek = {}, used = new Set(), tot = {};
+  for (const [key, l] of Object.entries(state.lessons || {})) {
+    const title = (l.title || '').trim();
+    if (!title) continue;
+    const [di, sid] = key.split('|');
+    if (di < s.start || di > s.end) continue;
+    const who = whoAt(di, sid);
+    if (reviewWho === 'me' && who === 'partner') continue;
+    if (reviewWho === 'partner' && who === 'me') continue;
+    const subId = l.subjectId || s.timetable[(dayIdx(di) + 1) + '-' + sid] || '_none';
+    const mk = iso(monday(parse(di)));
+    const status = l.cancelled ? 'cancelled' : di < today ? 'done' : 'planned';
+    ((byWeek[mk] = byWeek[mk] || {})[subId] = byWeek[mk][subId] || []).push({ key, di, si: slotIndex(sid), title, status, lk: !!l.lk });
+    used.add(subId);
+    const t = tot[subId] = tot[subId] || { done: 0, planned: 0 }; if (status === 'done') t.done++; else if (status === 'planned') t.planned++;
+  }
+  const cols = s.subjects.filter(x => used.has(x.id)).concat(used.has('_none') ? [{ id: '_none', name: 'Ohne Fach', color: '#999' }] : []);
+  // gleiche Themen einer Woche zusammenfassen: «Perfekt üben (Mo, Mi)»
+  const cell = list => {
+    const groups = [];
+    for (const x of list.sort((a, b) => a.di.localeCompare(b.di) || a.si - b.si)) {
+      const g = groups.find(y => y.title === x.title && y.status === x.status);
+      if (g) g.items.push(x); else groups.push({ title: x.title, status: x.status, items: [x] });
+    }
+    return `<ul class="rv-list">${groups.map(g => `<li class="rv-${g.status}"><button type="button" class="link" data-rvopen="${g.items[0].key}" title="${g.status === 'done' ? 'durchgeführt' : g.status === 'cancelled' ? 'fällt aus' : 'geplant'}">${g.status === 'done' ? '✓ ' : ''}${esc(g.title)}${g.items.some(i => i.lk) ? ' <span class="lk-tag">LK</span>' : ''}</button> <small>${g.items.map(i => DAYS[dayIdx(i.di)]).join(', ')}</small></li>`).join('')}</ul>`;
+  };
+  let n = 0;
+  const rows = schoolWeeks().map(mon => {
+    const mk = iso(mon), hol = weekHoliday(mk);
+    if (hol) return `<tr class="hol"><th class="wk" scope="row"><span class="hol-name">${esc(hol || 'Ferien')}</span></th><td colspan="${Math.max(1, cols.length)}" class="hol-cell"></td></tr>`;
+    n++;
+    const wk = byWeek[mk] || {};
+    const state3 = iso(addDays(mon, 4)) < today ? 'done' : mk === nowKey || mk <= today ? 'now' : 'planned';
+    return `<tr class="${mk === nowKey ? 'now' : ''}">
+      <th class="wk" scope="row"><button type="button" class="link" data-gotoweek="${mk}" title="Woche öffnen">W-${n}</button>
+        <small>KW ${isoWeek(mon)} · ${fmtShort(mon)}–${fmtShort(addDays(mon, 4))}</small>
+        <span class="rv-state rv-st-${state3}">${state3 === 'done' ? 'durchgeführt' : state3 === 'now' ? 'laufende Woche' : 'geplant'}</span></th>
+      ${cols.map(c => `<td style="--c:${c.color}">${wk[c.id] ? cell(wk[c.id]) : ''}</td>`).join('') || '<td></td>'}</tr>`;
+  }).join('');
+  v.innerHTML = `
+  <section class="page-head">
+    <h1>Jahresplanung ${sjLabel()}</h1>
+    ${yearTabsHTML()}
+    <p class="hint">Zusammenfassung aus den Themen der einzelnen Lektionen. <span class="rv-done">✓ durchgeführt</span> · <span class="rv-planned">geplant</span> · <span class="rv-cancelled">fällt aus</span>. Ein Klick auf ein Thema öffnet die Lektion.</p>
+    <div class="rv-filter no-print">${[['all', 'Alle Lektionen'], ['me', 'Meine (inkl. Team)'], ['partner', esc(partnerName()) + ' (inkl. Team)']].map(([k, t]) => `<button type="button" class="tag ${reviewWho === k ? 'on' : ''}" data-rvwho="${k}">${t}</button>`).join('')}
+      <button type="button" class="btn small" data-print>Drucken</button></div>
+  </section>
+  ${cols.length ? `<div class="table-wrap year-wrap">
+    <table class="year review">
+      <thead><tr><th>Woche</th>${cols.map(c => `<th style="--c:${c.color}"><span class="dot"></span>${esc(c.name)}<small class="rv-tot">${(tot[c.id] || {}).done || 0} durchgeführt · ${(tot[c.id] || {}).planned || 0} geplant</small></th>`).join('')}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>` : '<div class="notice">Noch keine Lektionen mit Thema in diesem Schuljahr. Sobald du in der Wochenansicht Lektionen mit Thema erfasst, erscheinen sie hier.</div>'}`;
+  if (scrollYearToNow) {
+    const row = v.querySelector('tr.now'), wrap = v.querySelector('.year-wrap');
+    if (row && wrap) wrap.scrollTop = row.offsetTop - 60;
+    scrollYearToNow = false;
+  }
+  v.oninput = null; v.onchange = null;
+  v.onclick = e => {
+    const yt = e.target.closest('[data-yeartab]');
+    if (yt) { yearTab = yt.dataset.yeartab; scrollYearToNow = true; render(); return; }
+    const w = e.target.closest('[data-rvwho]');
+    if (w) { reviewWho = w.dataset.rvwho; render(); return; }
+    if (e.target.closest('[data-print]')) { window.print(); return; }
+    const o = e.target.closest('[data-rvopen]');
+    if (o) { const k = o.dataset.rvopen; currentMonday = monday(parse(k.split('|')[0])); currentView = 'week'; render(); window.scrollTo(0, 0); openLesson(k); return; }
+    const g = e.target.closest('[data-gotoweek]');
+    if (g) { currentMonday = parse(g.dataset.gotoweek); currentView = 'week'; render(); window.scrollTo(0, 0); }
+  };
+}
 function yearTabsHTML() {
   return `<div class="year-tabs no-print">
     <button type="button" class="btn small ${yearTab === 'stoff' ? 'primary' : ''}" data-yeartab="stoff">Stoffaufteilung</button>
     <button type="button" class="btn small ${yearTab === 'weeks' ? 'primary' : ''}" data-yeartab="weeks">Themen pro Woche</button>
+    <button type="button" class="btn small ${yearTab === 'review' ? 'primary' : ''}" data-yeartab="review">Lektionen im Überblick</button>
   </div>`;
 }
 function renderStoff(v) {
@@ -1967,6 +2044,7 @@ function renderStoff(v) {
 // ----- Jahresplanung -----
 function renderYear(v) {
   if (yearTab === 'stoff') return renderStoff(v);
+  if (yearTab === 'review') return renderReview(v);
   const s = state.settings;
   const nowKey = iso(thisPlanningWeek());
   let n = 0;

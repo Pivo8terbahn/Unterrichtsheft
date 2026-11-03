@@ -756,3 +756,22 @@ dialog.search-dlg::backdrop { background: rgba(30,25,10,.35); }
 .search-hit mark { background: #ffe58a; color: inherit; border-radius: 2px; padding: 0 1px; }
 @media (max-width: 600px) { .search-hit { grid-template-columns: 1fr; gap: 2px; } .sh-kind { display: none; } }
 @media print { .search-btn { display: none; } }
+
+/* Jahresplanung: Lektionen im Überblick */
+table.review td { padding: 6px 9px; min-width: 150px; }
+table.review thead th small.rv-tot { display: block; font-weight: 400; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.rv-list li { line-height: 1.3; }
+.rv-list .link { text-align: left; font-size: 13px; padding: 0; }
+.rv-list small { color: var(--muted); font-size: 11px; }
+.rv-done .link, span.rv-done { color: #1f6b3a; }
+.rv-planned .link, span.rv-planned { color: #6b6b6b; font-style: italic; }
+.rv-cancelled .link, span.rv-cancelled { color: #9a9a9a; text-decoration: line-through; }
+.rv-state { display: inline-block; margin-top: 3px; font-size: 10.5px; padding: 0 6px; border-radius: 99px; }
+.rv-st-done { background: #dff1e5; color: #1f6b3a; }
+.rv-st-now { background: #fff3c4; color: #6b5a1e; }
+.rv-st-planned { background: #eef0f3; color: #555; }
+.rv-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.rv-filter .tag.on { background: var(--ochre); color: #fff; border-color: var(--ochre); }
+.rv-filter .btn { margin-left: auto; }
+@media print { table.review { min-width: 0; font-size: 10px; } .year-wrap { max-height: none !important; overflow: visible !important; } }
