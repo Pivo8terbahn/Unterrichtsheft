@@ -273,8 +273,8 @@ function openFixedEdit(id) {
       <label class="field"><span>Bezeichnung</span><input name="ftitle" value="${esc(x.title)}"></label>
       <div class="form-row">
         <label class="field"><span>Datum</span><input type="date" name="fdate" value="${x.date}"></label>
-        <label class="field narrow"><span>von</span><input type="time" name="ffrom" value="${x.from}"></label>
-        <label class="field narrow"><span>bis</span><input type="time" name="fto" value="${x.to}"></label>
+        <label class="field narrow"><span>von</span><input type="time" step="300" name="ffrom" value="${x.from}"></label>
+        <label class="field narrow"><span>bis</span><input type="time" step="300" name="fto" value="${x.to}"></label>
       </div>
       <label class="field"><span>Ergänzung</span><input name="fnote" value="${esc(x.note || '')}" placeholder="z. B. Badesachen mitnehmen"></label>
     </div>
@@ -1073,7 +1073,7 @@ function renderWeek(v) {
     const owner = dayOwner(d + 1);
     const off = offDay(di);
     const dayMeet = (state.meetings || []).filter(m => m.date === di && !m.presId);
-    const dayBadges = badgeHTML(di, 'tag') + dayEvs.map(e => `<span class="day-ev" title="${esc(e.title)}">${e.time ? e.time + ' ' : ''}${esc(e.title)}</span>`).join('')
+    const dayBadges = badgeHTML(di, 'tag') + dayEvs.map(e => `<span class="day-ev ev-${evKind(e)}" style="--ek:${EV_KINDS[evKind(e)].color}" title="${esc((evKind(e) !== 'termin' ? EV_KINDS[evKind(e)].label + ': ' : '') + e.title)}">${e.time ? e.time + ' ' : ''}${esc(e.title)}</span>`).join('')
       + dayMeet.map(m => `<span class="day-ev cw" role="button" data-cwopen="${m.id}" style="--gc:${cwGroup(m.group).color}" title="${esc(cwGroup(m.group).name)}: ${esc(m.title || '')}">${m.time ? esc(m.time) + ' ' : ''}${esc(cwGroup(m.group).name)}</span>`).join('');
     if (dayBadges) headExtra = 1;
     if (off || owner === 'partner') chipRow = true;
@@ -1300,7 +1300,7 @@ function openPicker(di, pos) {
       : '<p>Noch keine Kennzeichen vorhanden.</p>'}
     ${isMittag ? `<div class="meet-form">
       <h3>Besprechung</h3>
-      <div class="add-inline"><input name="mtitle" placeholder="z. B. Besprechung SHP, Elterngespräch" aria-label="Besprechung"><input type="time" name="mtime" aria-label="Zeit"><button type="button" class="btn small primary" data-addmeet>Hinzufügen</button></div>
+      <div class="add-inline"><input name="mtitle" placeholder="z. B. Besprechung SHP, Elterngespräch" aria-label="Besprechung"><input type="time" step="300" name="mtime" aria-label="Zeit"><button type="button" class="btn small primary" data-addmeet>Hinzufügen</button></div>
     </div>` : ''}
     <fieldset class="seg"><legend class="sr">Wiederholung</legend>
       <label><input type="radio" name="rep" value="once" checked> Nur diese Woche</label>
@@ -1758,8 +1758,8 @@ function meetingCard(m) {
         ${pres ? `<p class="hint" style="margin:0">Aus den Präsenznachmittagen: ${esc(pres.title)}, ${esc(PRES_BLOCKS[pres.block])} Uhr. <button type="button" class="link" data-pres="${pres.id}">Präsenz-Eintrag bearbeiten</button></p>` : `
         <label class="field"><span>Gruppe</span><select data-mf="group">${cwGroups().map(x => `<option value="${x.id}" ${x.id === m.group ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
         <label class="field"><span>Datum</span><input type="date" data-mf="date" value="${m.date || ''}"></label>
-        <label class="field narrow"><span>von</span><input type="time" data-mf="time" value="${esc(m.time || '')}"></label>
-        <label class="field narrow"><span>bis</span><input type="time" data-mf="end" value="${esc(m.end || '')}"></label>`}
+        <label class="field narrow"><span>von</span><input type="time" step="300" data-mf="time" value="${esc(m.time || '')}"></label>
+        <label class="field narrow"><span>bis</span><input type="time" step="300" data-mf="end" value="${esc(m.end || '')}"></label>`}
       </div>
       <div class="form-row">
         ${pres ? '' : `<label class="field"><span>Thema</span><input data-mf="title" value="${esc(m.title || '')}" placeholder="z. B. Planung Projektwoche"></label>`}
@@ -1811,7 +1811,7 @@ function renderCowork(v) {
         <form class="add-form" data-addmeeting>
           <select name="group" aria-label="Gruppe">${groups.filter(g => g.id !== 'ut').map(g => `<option value="${g.id}" ${cwFilter === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}<option value="ut" ${cwFilter === 'ut' ? 'selected' : ''}>U-Team (zusätzlich)</option></select>
           <input type="date" name="date" required aria-label="Datum">
-          <input type="time" name="time" aria-label="Beginn">
+          <input type="time" step="300" name="time" aria-label="Beginn">
           <input name="title" placeholder="Thema, z. B. Planung ELO-Tag" aria-label="Thema">
           <button class="btn primary">Erstellen</button>
         </form>
@@ -2222,12 +2222,16 @@ function renderYear(v) {
 // ----- Termine & To-dos -----
 
 // Alle Einträge für die Terminliste: eigene Termine, Feiertage, Ferien, Lernkontrollen, einmalige Kennzeichen, Geburtstage
-const AG_TYPES = [['termin', 'Termine'], ['cowork', 'CoWork'], ['praesenz', 'Präsenz'], ['feiertag', 'Feiertage'], ['ferien', 'Ferien'], ['lk', 'Lernkontrollen'], ['kennzeichen', 'Kennzeichen'], ['geburtstag', 'Geburtstage']];
+// Arten von Terminen: Elterngespräche und Orientierungsgespräche mit eigener Farbe
+const EV_KINDS = { termin: { label: 'Termin', color: '#bf9000' }, eltern: { label: 'Elterngespräch', color: '#d9467a' }, orient: { label: 'Orientierungsgespräch', color: '#0f8a8a' } };
+let lastEvKind = 'termin';
+const evKind = e => (e && EV_KINDS[e.kind]) ? e.kind : 'termin';
+const AG_TYPES = [['termin', 'Termine'], ['eltern', 'Elterngespräche'], ['orient', 'Orientierungsgespräche'], ['cowork', 'CoWork'], ['praesenz', 'Präsenz'], ['feiertag', 'Feiertage'], ['ferien', 'Ferien'], ['lk', 'Lernkontrollen'], ['kennzeichen', 'Kennzeichen'], ['geburtstag', 'Geburtstage']];
 let agendaFilter = new Set(AG_TYPES.map(x => x[0]));
 let todoFilter = '';
 function agendaItems() {
   const s = state.settings, out = [], c = calYear();
-  for (const e of state.events) out.push({ type: 'termin', date: e.date, time: e.time, title: e.title, note: e.note, id: e.id });
+  for (const e of state.events) out.push({ type: evKind(e), date: e.date, time: e.time, title: e.title, note: e.note, id: e.id });
   if (c) {
     for (const [n, d] of c.feiertage) out.push({ type: 'feiertag', date: d, title: n, note: 'schulfrei' });
     for (const [n, a, b] of c.ferien) out.push({ type: 'ferien', date: a, to: b, title: n });
@@ -2300,7 +2304,7 @@ function renderAgenda(v) {
   const today = iso(new Date());
   const all = agendaItems().filter(x => agendaFilter.has(x.type));
   const up = all.filter(e => (e.to || e.date) >= today), past = all.filter(e => (e.to || e.date) < today).reverse();
-  const label = { cowork: 'CoWork', praesenz: 'Präsenz', termin: 'Termin', feiertag: 'Feiertag', ferien: 'Ferien', lk: 'LK', kennzeichen: 'Kennzeichen', geburtstag: 'Geburtstag' };
+  const label = { cowork: 'CoWork', praesenz: 'Präsenz', termin: 'Termin', eltern: 'Elterngespräch', orient: 'Orientierungsgespräch', feiertag: 'Feiertag', ferien: 'Ferien', lk: 'LK', kennzeichen: 'Kennzeichen', geburtstag: 'Geburtstag' };
   const dLabel = d => `${DAYS7[parse(d).getDay()]} ${fmtShort(parse(d))}${parse(d).getFullYear()}`;
   const evLi = e => `<li class="ev ag-${e.type}" ${e.color ? `style="--t:${e.color};--tf:${e.fg || '#fff'}"` : ''}>
       <div class="ev-when"><b>${dLabel(e.date)}</b>${e.to ? `<small>bis ${dLabel(e.to)}</small>` : ''}${e.timeLabel ? `<small>${esc(e.timeLabel)}</small>` : e.time ? `<small>${e.time}</small>` : ''}</div>
@@ -2308,7 +2312,7 @@ function renderAgenda(v) {
       <div class="ev-what"><span class="ag-type">${esc(e.label || label[e.type])}</span> ${e.pres ? `<button type="button" class="link ag-title" data-pres="${e.pres}"><strong>${esc(e.title)}</strong></button>` : `<strong>${esc(e.title)}</strong>`}${e.note ? `<p>${esc(e.note)}</p>` : ''}</div>
       ${e.meeting ? `<button type="button" class="icon-btn" data-cwopen="${e.meeting}" aria-label="Im CoWork öffnen" title="Im CoWork öffnen">✎</button>` : ''}
       <button type="button" class="icon-btn" data-gotoweek="${iso(monday([0, 6].includes(parse(e.date).getDay()) ? addDays(parse(e.date), 2) : parse(e.date)))}" aria-label="Woche öffnen" title="Woche öffnen">→</button>
-      ${e.type === 'termin' ? `<button type="button" class="icon-btn" data-delev="${e.id}" aria-label="Termin löschen">✕</button>` : ''}</li>`;
+      ${['termin', 'eltern', 'orient'].includes(e.type) ? `<button type="button" class="icon-btn" data-delev="${e.id}" aria-label="Termin löschen">✕</button>` : ''}</li>`;
   const todoGs = cwGroups();
   const todos = [...state.todos].filter(t => !todoFilter || (todoFilter === '-' ? !todoGroupId(t) : todoGroupId(t) === todoFilter)).sort((a, b) => (a.done - b.done) || (a.due || a.week || '9').localeCompare(b.due || b.week || '9'));
   const wLabel = mk => { const n = schoolWeekNumber(mk); return n ? 'W-' + n : 'KW ' + isoWeek(parse(mk)); };
@@ -2318,9 +2322,10 @@ function renderAgenda(v) {
     <section class="card">
       <h2>Termine</h2>
       <form class="add-form" data-addev>
+        <select name="kind" aria-label="Art des Termins">${Object.entries(EV_KINDS).map(([k, x]) => `<option value="${k}" ${lastEvKind === k ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
         <input type="date" name="date" required value="${today}" aria-label="Datum">
-        <input type="time" name="time" aria-label="Zeit">
-        <input name="title" placeholder="Was? z. B. Elternabend" required aria-label="Titel">
+        <input type="time" step="300" name="time" aria-label="Zeit">
+        <input name="title" placeholder="Was? z. B. Elternabend, beim Gespräch: Familie" aria-label="Titel">
         <input name="note" placeholder="Notiz (optional)" aria-label="Notiz">
         <button class="btn primary">Hinzufügen</button>
       </form>
@@ -2376,7 +2381,12 @@ function renderAgenda(v) {
     const f = e.target, fd = new FormData(f);
     if (f.matches('[data-addshop]')) { (state.shopping = state.shopping || []).push({ id: uid(), text: fd.get('text').trim(), where: fd.get('where').trim(), due: fd.get('due') || '', done: false }); save(); render(); $('[data-addshop] [name=text]')?.focus(); return; }
     if (f.matches('[data-addpres]')) { state.presence.push({ id: uid(), date: fd.get('date'), block: fd.get('block'), cat: fd.get('cat'), title: fd.get('title').trim() }); save(); render(); return; }
-    if (f.matches('[data-addev]')) state.events.push({ id: uid(), date: fd.get('date'), time: fd.get('time') || '', title: fd.get('title').trim(), note: fd.get('note').trim() });
+    if (f.matches('[data-addev]')) {
+      const kind = fd.get('kind') || 'termin'; lastEvKind = kind;
+      const title = fd.get('title').trim() || (kind !== 'termin' ? EV_KINDS[kind].label : '');
+      if (!title) { f.querySelector('[name=title]').focus(); return; }
+      state.events.push({ id: uid(), date: fd.get('date'), time: fd.get('time') || '', title, note: fd.get('note').trim(), ...(kind !== 'termin' ? { kind } : {}) });
+    }
     else if (f.matches('[data-addtodo]')) { const g = fd.get('group') || ''; state.todos.push({ id: uid(), text: fd.get('text').trim(), due: fd.get('due') || '', done: false, ...(g ? { group: g } : {}) }); }
     const which = f.matches('[data-addev]') ? '[data-addev] [name=title]' : '[data-addtodo] [name=text]';
     save(); render();
@@ -2461,9 +2471,9 @@ function renderSettings(v) {
       <h2>Lektionszeiten</h2>
       <ul class="row-list">${s.slots.map((sl, i) => `<li>
         <span class="muted num">${i + 1}.</span>
-        <input type="time" data-slot="${sl.id}|from" value="${sl.from}" aria-label="Beginn">
+        <input type="time" step="300" data-slot="${sl.id}|from" value="${sl.from}" aria-label="Beginn">
         <span class="muted">bis</span>
-        <input type="time" data-slot="${sl.id}|to" value="${sl.to}" aria-label="Ende">
+        <input type="time" step="300" data-slot="${sl.id}|to" value="${sl.to}" aria-label="Ende">
         <button type="button" class="icon-btn" data-delslot="${sl.id}" aria-label="Lektion entfernen">✕</button></li>`).join('')}</ul>
       <button type="button" class="btn small" data-addslot>+ Lektion hinzufügen</button>
       <p class="hint">PAUSE (ab 10 Minuten Lücke) und MITTAG (ab 50 Minuten Lücke) erscheinen automatisch zwischen den Lektionen. Die Zeiten sind aus deinem OneNote-Heft übernommen.</p>
