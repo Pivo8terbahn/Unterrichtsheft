@@ -1975,6 +1975,16 @@ function renderHolidays(v) {
   const nextFer = ferien.find(f => f.a > today), curFer = ferien.find(f => f.a <= today && f.b >= today);
   const nextFt = feier.find(f => f.d >= today);
   let sw = 0; for (let m = monday(parse(c.start)); iso(m) < c.summer; m = addDays(m, 7)) if (!weekHoliday(iso(m))) sw++;
+  // Schulwochen zwischen zwei Ferien: Wochen mit mindestens einem Schultag (Feiertage an Werktagen zählen nicht als Schultag)
+  const freeDays = new Set(zugHolidays(c.start, yEnd).map(x => x.d).concat(Object.keys(own ? st.extraOff || {} : {})));
+  const gapRow = (prev, f) => {
+    const a0 = prev ? iso(addDays(parse(prev.b), 1)) : c.start, b0 = iso(addDays(parse(f.a), -1));
+    let days = 0; const weeks = new Set();
+    for (let d = parse(a0); iso(d) <= b0; d = addDays(d, 1)) { const w = d.getDay(); if (w > 0 && w < 6 && !freeDays.has(iso(d))) { days++; weeks.add(iso(monday(d))); } }
+    if (!days) return '';
+    const n = weeks.size;
+    return `<tr class="gap-row hs-${status(a0, b0)}"><td colspan="4"><span>${prev ? '' : 'ab Schulbeginn: '}<b>${n} ${n === 1 ? 'Schulwoche' : 'Schulwochen'}</b> <small>(${days} Schultage)</small></span></td></tr>`;
+  };
   v.innerHTML = `
   <section class="page-head">
     <h1>Jahresplanung ${sjLabel()}</h1>
@@ -1990,7 +2000,7 @@ function renderHolidays(v) {
     <section class="card">
       <h2>Ferien ${esc(y)}</h2>
       <table class="hol-table"><thead><tr><th>Ferien</th><th>von</th><th>bis</th><th>Dauer</th></tr></thead><tbody>
-        ${ferien.map(f => `<tr class="hs-${status(f.a, f.b)}"><td><b>${esc(f.n)}</b></td><td>${dLong(f.a)}</td><td>${f.a === f.b ? '' : dLong(f.b)}</td><td>${f.a === f.b ? '' : (() => { const d = nDays(f.a, f.b); return d >= 7 ? Math.round(d / 7) + (Math.round(d / 7) === 1 ? ' Woche' : ' Wochen') : schoolDays(f.a, f.b) + ' Schultage'; })()}</td></tr>`).join('')}
+        ${ferien.map((f, i) => gapRow(i === 0 ? null : ferien[i - 1], f) + `<tr class="hs-${status(f.a, f.b)}"><td><b>${esc(f.n)}</b></td><td>${dLong(f.a)}</td><td>${f.a === f.b ? '' : dLong(f.b)}</td><td>${f.a === f.b ? '' : (() => { const d = nDays(f.a, f.b); return d >= 7 ? Math.round(d / 7) + (Math.round(d / 7) === 1 ? ' Woche' : ' Wochen') : schoolDays(f.a, f.b) + ' Schultage'; })()}</td></tr>`).join('')}
       </tbody></table>
       ${manual.length ? `<h3>Zusätzlich als Ferien markierte Wochen</h3><ul class="hol-list">${manual.map(x => `<li><button type="button" class="link" data-gotoweek="${x.mk}">${fmtShort(parse(x.mk))}–${fmtShort(addDays(parse(x.mk), 4))}${parse(x.mk).getFullYear()}</button> ${esc(x.n || 'Ferien')}</li>`).join('')}</ul>` : ''}
     </section>

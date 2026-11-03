@@ -797,3 +797,8 @@ table.review thead th small.rv-tot { display: block; font-weight: 400; font-size
 .fv-we { background: #efefef; color: #666; }
 .fv-free { background: #dff1e5; color: #1f6b3a; font-weight: 600; }
 .hol-table tr.on-school td:first-child b { color: #1f6b3a; }
+
+.hol-table tr.gap-row td { padding: 3px 8px 3px 22px; border-bottom: 1px solid var(--line); background: #faf8f2; font-size: 12.5px; color: #6b5a1e; }
+.hol-table tr.gap-row td span::before { content: '↕ '; color: var(--ochre); }
+.hol-table tr.gap-row small { color: var(--muted); }
+.hol-table tr.gap-row.hs-past td { color: #a8a8a8; }
