@@ -1925,6 +1925,69 @@ function stoffCols() {
   cols.push({ key: 'over', label: 'Übergreifender Unterricht', who: '', color: '#9aa0a6' });
   return cols;
 }
+// ----- Jahresplanung: Ferien und Feiertage (Ferienplan Kanton Zug plus eigene Einträge) -----
+let holYear = null;
+function renderHolidays(v) {
+  const st = state.settings, years = Object.keys(ZG_CALENDAR);
+  const y = holYear && ZG_CALENDAR[holYear] ? holYear : (st.calendarYear in ZG_CALENDAR ? st.calendarYear : years[0]);
+  const c = ZG_CALENDAR[y], nextY = years[years.indexOf(y) + 1], next = nextY ? ZG_CALENDAR[nextY] : null;
+  const today = iso(new Date());
+  const dLong = d => `${DAYS7[parse(d).getDay()]} ${fmtShort(parse(d))}${parse(d).getFullYear()}`;
+  const nDays = (a, b) => Math.round((parse(b) - parse(a)) / 864e5) + 1;
+  const schoolDays = (a, b) => { let n = 0; for (let d = parse(a); d <= parse(b); d = addDays(d, 1)) { const w = d.getDay(); if (w > 0 && w < 6) n++; } return n; };
+  const status = (a, b) => b < today ? 'past' : a <= today ? 'now' : 'future';
+  const inDays = a => { const n = Math.round((parse(a) - parse(today)) / 864e5); return n === 1 ? 'morgen' : `in ${n} Tagen`; };
+  // Ferien inkl. Sommerferien bis zum Schulbeginn im nächsten Jahr
+  const ferien = c.ferien.map(([n, a, b]) => ({ n, a, b }));
+  if (next) ferien.push({ n: 'Sommerferien', a: c.summer, b: iso(addDays(parse(next.start), -1)) });
+  else ferien.push({ n: 'Sommerferien (ab)', a: c.summer, b: c.summer });
+  const own = y === st.calendarYear;
+  const extra = own ? Object.entries(st.extraOff || {}).filter(([d]) => d >= c.start && d < c.summer).map(([d, n]) => ({ d, n, local: true })) : [];
+  const feier = c.feiertage.map(([n, d]) => ({ d, n })).concat(extra).sort((a, b) => a.d.localeCompare(b.d));
+  const manual = own ? Object.entries(st.holidays || {}).sort().map(([mk, n]) => ({ mk, n })) : [];
+  const nextFer = ferien.find(f => f.a > today), curFer = ferien.find(f => f.a <= today && f.b >= today);
+  const nextFt = feier.find(f => f.d >= today);
+  let sw = 0; for (let m = monday(parse(c.start)); iso(m) < c.summer; m = addDays(m, 7)) if (!weekHoliday(iso(m))) sw++;
+  v.innerHTML = `
+  <section class="page-head">
+    <h1>Jahresplanung ${sjLabel()}</h1>
+    ${yearTabsHTML()}
+    <div class="rv-filter no-print">${years.map(k => `<button type="button" class="tag ${k === y ? 'on' : ''}" data-holyear="${k}">${k}</button>`).join('')}<button type="button" class="btn small" data-print>Drucken</button></div>
+  </section>
+  ${own ? `<div class="hol-summary">
+    ${curFer ? `<div class="hs-box now"><b>${esc(curFer.n)}</b><span>bis ${dLong(curFer.b)}</span></div>` : nextFer ? `<div class="hs-box"><b>Nächste Ferien: ${esc(nextFer.n)}</b><span>ab ${dLong(nextFer.a)}, ${inDays(nextFer.a)}</span></div>` : ''}
+    ${nextFt ? `<div class="hs-box ft"><b>Nächster Feiertag: ${esc(nextFt.n)}</b><span>${dLong(nextFt.d)}${nextFt.d === today ? ', heute' : ', ' + inDays(nextFt.d)}</span></div>` : ''}
+    <div class="hs-box"><b>Schuljahr ${esc(y)}</b><span>Schulbeginn ${dLong(c.start)} · ${sw} Schulwochen</span></div>
+  </div>` : `<p class="hint">Vorschau aus dem Ferienplan. Das Unterrichtsheft arbeitet mit dem Schuljahr ${esc(st.calendarYear)} (änderbar in den Einstellungen).</p>`}
+  <div class="hol-grid">
+    <section class="card">
+      <h2>Ferien ${esc(y)}</h2>
+      <table class="hol-table"><thead><tr><th>Ferien</th><th>von</th><th>bis</th><th>Dauer</th></tr></thead><tbody>
+        ${ferien.map(f => `<tr class="hs-${status(f.a, f.b)}"><td><b>${esc(f.n)}</b></td><td>${dLong(f.a)}</td><td>${f.a === f.b ? '' : dLong(f.b)}</td><td>${f.a === f.b ? '' : (() => { const d = nDays(f.a, f.b); return d >= 7 ? Math.round(d / 7) + (Math.round(d / 7) === 1 ? ' Woche' : ' Wochen') : schoolDays(f.a, f.b) + ' Schultage'; })()}</td></tr>`).join('')}
+      </tbody></table>
+      ${manual.length ? `<h3>Zusätzlich als Ferien markierte Wochen</h3><ul class="hol-list">${manual.map(x => `<li><button type="button" class="link" data-gotoweek="${x.mk}">${fmtShort(parse(x.mk))}–${fmtShort(addDays(parse(x.mk), 4))}${parse(x.mk).getFullYear()}</button> ${esc(x.n || 'Ferien')}</li>`).join('')}</ul>` : ''}
+    </section>
+    <section class="card">
+      <h2>Feiertage und schulfreie Tage</h2>
+      <table class="hol-table"><thead><tr><th>Datum</th><th>Anlass</th><th></th></tr></thead><tbody>
+        ${feier.map(f => `<tr class="hs-${status(f.d, f.d)}"><td>${dLong(f.d)}</td><td><b>${esc(f.n)}</b></td><td class="muted">${f.local ? 'schulfrei Stadt Zug' : 'Feiertag'}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="hint">Aufgeführt sind die schulfreien Feiertage an Schultagen gemäss Ferienplan sowie eigene schulfreie Tage.</p>
+    </section>
+  </div>
+  <p class="hint">Quelle: «Schulferien 2026/27 bis 2030/31», Amt für gemeindliche Schulen Kanton Zug, 28. Mai 2026. Eigene schulfreie Tage und Ferienwochen stammen aus deinen Einstellungen bzw. der Spalte «Themen pro Woche».</p>`;
+  v.oninput = null; v.onchange = null;
+  v.onclick = e => {
+    const yt = e.target.closest('[data-yeartab]');
+    if (yt) { yearTab = yt.dataset.yeartab; scrollYearToNow = true; render(); return; }
+    const hy = e.target.closest('[data-holyear]');
+    if (hy) { holYear = hy.dataset.holyear; render(); return; }
+    if (e.target.closest('[data-print]')) { window.print(); return; }
+    const g = e.target.closest('[data-gotoweek]');
+    if (g) { currentMonday = monday(parse(g.dataset.gotoweek)); currentView = 'week'; render(); window.scrollTo(0, 0); }
+  };
+}
+
 // ----- Jahresplanung: Lektionen im Überblick (geplant und durchgeführt, aus den Themen der Lektionen) -----
 let reviewWho = 'all';
 function renderReview(v) {
@@ -2006,6 +2069,7 @@ function yearTabsHTML() {
     <button type="button" class="btn small ${yearTab === 'stoff' ? 'primary' : ''}" data-yeartab="stoff">Stoffaufteilung</button>
     <button type="button" class="btn small ${yearTab === 'weeks' ? 'primary' : ''}" data-yeartab="weeks">Themen pro Woche</button>
     <button type="button" class="btn small ${yearTab === 'review' ? 'primary' : ''}" data-yeartab="review">Lektionen im Überblick</button>
+    <button type="button" class="btn small ${yearTab === 'holidays' ? 'primary' : ''}" data-yeartab="holidays">Ferien und Feiertage</button>
   </div>`;
 }
 function renderStoff(v) {
@@ -2045,6 +2109,7 @@ function renderStoff(v) {
 function renderYear(v) {
   if (yearTab === 'stoff') return renderStoff(v);
   if (yearTab === 'review') return renderReview(v);
+  if (yearTab === 'holidays') return renderHolidays(v);
   const s = state.settings;
   const nowKey = iso(thisPlanningWeek());
   let n = 0;
