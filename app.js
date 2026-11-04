@@ -70,7 +70,7 @@ function defaultBadges() {
   return [
     ['Pausenaufsicht', 'bilder/pausenaufsicht.jpg'], ['Meeting U-Team', 'bilder/meeting-u-team.jpg'],
     ['Meeting Herti-Team', 'bilder/meeting-herti-team.jpg'], ['Schwimmunterricht', 'bilder/schwimmunterricht.jpg'],
-    ['ZAZ/IP', 'bilder/zaz-ip.jpg']
+    ['ZAZ/IP', 'bilder/zaz-ip.jpg'], ['Elterngespräch', 'bilder/elterngespraech.jpg']
   ].map(([name, src]) => ({ id: uid(), name, src }));
 }
 const SHORTS = { 'Deutsch': 'D', 'Mathematik': 'M', 'NMG': 'NMG', 'Englisch': 'E', 'TTG': 'TG', 'TG': 'TG', 'Musik': 'MU', 'Medien und Informatik': 'MI', 'Bildnerisches Gestalten': 'BG', 'Bewegung und Sport': 'BS', 'Schulhaus-Events': 'SH-E' };
@@ -157,6 +157,11 @@ function migrate(s) {
     for (const [name, color] of [['Bildnerisches Gestalten', '#d14f9b'], ['Bewegung und Sport', '#56708f']])
       if (!out.settings.subjects.some(x => x.name === name || x.short === SHORTS[name])) out.settings.subjects.push({ id: uid(), name, short: SHORTS[name], color });
     out.imports.subjBGBS = true;
+  }
+  // Kennzeichen «Elterngespräch» einmalig ergänzen
+  if (!out.imports.badgeEltern && out.settings && out.settings.badges) {
+    if (!out.settings.badges.some(x => x.name === 'Elterngespräch')) out.settings.badges.push({ id: uid(), name: 'Elterngespräch', src: 'bilder/elterngespraech.jpg' });
+    out.imports.badgeEltern = true;
   }
   // Fach für Anlässe mit dem ganzen Schulhausteam oder anderen Klassen, einmalig ergänzen
   if (!out.imports.subjSHE && out.settings && out.settings.subjects) {
@@ -440,7 +445,9 @@ function badgeHTML(di, pos) {
   let h = badgesAt(di, pos).map(p => {
     if (p.meeting) { const md = state.meetDetails[p.id + '|' + di]; const nt = state.todos.filter(t => t.meetPlace === p.id + '|' + di && !t.done).length; return `<span class="bdg meet" data-place="${p.id}" data-date="${di}" title="${esc(p.meeting.title)}${p.repeat ? ' (jede Woche)' : ''}${md || nt ? ': Notizen vorhanden' : ''}">${p.meeting.time ? esc(p.meeting.time) + ' ' : ''}${esc(p.meeting.title)}${md || nt ? ' ✎' : ''}</span>`; }
     const b = badge(p.badgeId);
-    return b ? `<span class="bdg" data-place="${p.id}" data-date="${di}" title="${esc(b.name)}${p.repeat ? ' (jede Woche)' : ''}">${bImg(b)}</span>` : '';
+    // Pausenaufsicht trägt zusätzlich den Vermerk als Text
+    const lbl = b && (b.src === 'bilder/pausenaufsicht.jpg' || /^pausenaufsicht$/i.test(b.name || '')) ? 'Pausenaufsicht' : '';
+    return b ? `<span class="bdg ${lbl ? 'with-label' : ''}" data-place="${p.id}" data-date="${di}" title="${esc(b.name)}${p.repeat ? ' (jede Woche)' : ''}">${bImg(b)}${lbl ? `<em class="bdg-label">${lbl}</em>` : ''}</span>` : '';
   }).join('');
   if (pos === 'tag') h += birthdaysOn(di).map(x => `<span class="bdg bday" title="Geburtstag ${esc(x.name)}"><img src="bilder/geburtstag.jpg" alt=""><em>${esc(x.name.split(' ')[0])}</em></span>`).join('');
   return h;
