@@ -2283,10 +2283,10 @@ function renderYear(v) {
 
 // Alle Einträge für die Terminliste: eigene Termine, Feiertage, Ferien, Lernkontrollen, einmalige Kennzeichen, Geburtstage
 // Arten von Terminen: Elterngespräche und Orientierungsgespräche mit eigener Farbe
-const EV_KINDS = { termin: { label: 'Termin', color: '#bf9000' }, eltern: { label: 'Elterngespräch', color: '#d9467a' }, orient: { label: 'Orientierungsgespräch', color: '#0f8a8a' } };
+const EV_KINDS = { termin: { label: 'Termin', color: '#bf9000' }, eltern: { label: 'Elterngespräch', color: '#d9467a' }, orient: { label: 'Orientierungsgespräch', color: '#0f8a8a' }, ict: { label: 'ICT', color: '#4b3fb0' } };
 let lastEvKind = 'termin';
 const evKind = e => (e && EV_KINDS[e.kind]) ? e.kind : 'termin';
-const AG_TYPES = [['termin', 'Termine'], ['eltern', 'Elterngespräche'], ['orient', 'Orientierungsgespräche'], ['cowork', 'CoWork'], ['praesenz', 'Präsenz'], ['feiertag', 'Feiertage'], ['ferien', 'Ferien'], ['lk', 'Lernkontrollen'], ['kennzeichen', 'Kennzeichen'], ['geburtstag', 'Geburtstage']];
+const AG_TYPES = [['termin', 'Termine'], ['eltern', 'Elterngespräche'], ['orient', 'Orientierungsgespräche'], ['ict', 'ICT'], ['cowork', 'CoWork'], ['praesenz', 'Präsenz'], ['feiertag', 'Feiertage'], ['ferien', 'Ferien'], ['lk', 'Lernkontrollen'], ['kennzeichen', 'Kennzeichen'], ['geburtstag', 'Geburtstage']];
 let agendaFilter = new Set(AG_TYPES.map(x => x[0]));
 let todoFilter = '';
 function agendaItems() {
@@ -2364,17 +2364,17 @@ function renderAgenda(v) {
   const today = iso(new Date());
   const all = agendaItems().filter(x => agendaFilter.has(x.type));
   const up = all.filter(e => (e.to || e.date) >= today), past = all.filter(e => (e.to || e.date) < today).reverse();
-  const label = { cowork: 'CoWork', praesenz: 'Präsenz', termin: 'Termin', eltern: 'Elterngespräch', orient: 'Orientierungsgespräch', feiertag: 'Feiertag', ferien: 'Ferien', lk: 'LK', kennzeichen: 'Kennzeichen', geburtstag: 'Geburtstag' };
+  const label = { cowork: 'CoWork', praesenz: 'Präsenz', termin: 'Termin', eltern: 'Elterngespräch', orient: 'Orientierungsgespräch', ict: 'ICT', feiertag: 'Feiertag', ferien: 'Ferien', lk: 'LK', kennzeichen: 'Kennzeichen', geburtstag: 'Geburtstag' };
   const dLabel = d => `${DAYS7[parse(d).getDay()]} ${fmtShort(parse(d))}${parse(d).getFullYear()}`;
   const evLi = e => `<li class="ev ag-${e.type}" ${e.color ? `style="--t:${e.color};--tf:${e.fg || '#fff'}"` : ''}>
       <div class="ev-when"><b>${dLabel(e.date)}</b>${e.to ? `<small>bis ${dLabel(e.to)}</small>` : ''}${e.timeLabel ? `<small>${esc(e.timeLabel)}</small>` : e.time ? `<small>${e.time}</small>` : ''}</div>
       ${e.icon ? `<img class="ag-icon" src="${e.icon}" alt="">` : e.badgeImg ? `<span class="ag-icon">${e.badgeImg}</span>` : ''}
-      <div class="ev-what">${['termin', 'eltern', 'orient'].includes(e.type) && e.id
+      <div class="ev-what">${(e.type in EV_KINDS) && e.id
         ? `<select class="ag-type ag-kind" data-evkind="${e.id}" aria-label="Kennzeichnung des Termins" title="Kennzeichnung ändern">${Object.entries(EV_KINDS).map(([k, x]) => `<option value="${k}" ${e.type === k ? 'selected' : ''}>${x.label}</option>`).join('')}</select>`
         : `<span class="ag-type">${esc(e.label || label[e.type])}</span>`} ${e.pres ? `<button type="button" class="link ag-title" data-pres="${e.pres}"><strong>${esc(e.title)}</strong></button>` : `<strong>${esc(e.title)}</strong>`}${e.note ? `<p>${esc(e.note)}</p>` : ''}</div>
       ${e.meeting ? `<button type="button" class="icon-btn" data-cwopen="${e.meeting}" aria-label="Im CoWork öffnen" title="Im CoWork öffnen">✎</button>` : ''}
       <button type="button" class="icon-btn" data-gotoweek="${iso(monday([0, 6].includes(parse(e.date).getDay()) ? addDays(parse(e.date), 2) : parse(e.date)))}" aria-label="Woche öffnen" title="Woche öffnen">→</button>
-      ${['termin', 'eltern', 'orient'].includes(e.type) ? `<button type="button" class="icon-btn" data-delev="${e.id}" aria-label="Termin löschen">✕</button>` : ''}</li>`;
+      ${(e.type in EV_KINDS) ? `<button type="button" class="icon-btn" data-delev="${e.id}" aria-label="Termin löschen">✕</button>` : ''}</li>`;
   const todoGs = cwGroups();
   const todos = [...state.todos].filter(t => !todoFilter || (todoFilter === '-' ? !todoGroupId(t) : todoGroupId(t) === todoFilter)).sort((a, b) => (a.done - b.done) || (a.due || a.week || '9').localeCompare(b.due || b.week || '9'));
   const wLabel = mk => { const n = schoolWeekNumber(mk); return n ? 'W-' + n : 'KW ' + isoWeek(parse(mk)); };

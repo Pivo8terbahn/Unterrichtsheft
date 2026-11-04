@@ -804,9 +804,9 @@ table.review thead th small.rv-tot { display: block; font-weight: 400; font-size
 .hol-table tr.gap-row.hs-past td { color: #a8a8a8; }
 
 /* Elterngespräche und Orientierungsgespräche */
-.ag-eltern { --t: #d9467a; } .ag-orient { --t: #0f8a8a; }
-.ev.ag-eltern, .ev.ag-orient { box-shadow: inset 4px 0 0 var(--t); padding-left: 10px !important; }
-.day-ev.ev-eltern, .day-ev.ev-orient { background: var(--ek); color: #fff; border-color: var(--ek); }
+.ag-eltern { --t: #d9467a; } .ag-orient { --t: #0f8a8a; } .ag-ict { --t: #4b3fb0; }
+.ev.ag-eltern, .ev.ag-orient, .ev.ag-ict { box-shadow: inset 4px 0 0 var(--t); padding-left: 10px !important; }
+.day-ev.ev-eltern, .day-ev.ev-orient, .day-ev.ev-ict { background: var(--ek); color: #fff; border-color: var(--ek); }
 
 /* Zeile nach Schulschluss */
 .late-cell { height: var(--lateh, 40px); display: flex; flex-direction: column; gap: 3px; padding: 5px 6px; background: #f4f1e8; border-top: 2px solid var(--ochre-line); cursor: pointer; position: relative; overflow: hidden; }
