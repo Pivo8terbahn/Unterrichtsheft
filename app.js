@@ -1054,7 +1054,7 @@ function renderWeek(v) {
   }).join('');
 
   let cols = '';
-  let headExtra = 0, chipRow = false, maxTasks = 0, maxHw = 0, maxLate = 0; // Höhe von Kopf- und Notizzeile nach Inhalt
+  let heads = '', headExtra = 0, chipRow = false, maxTasks = 0, maxHw = 0, maxLate = 0; // Höhe von Kopf- und Notizzeile nach Inhalt
   const myDays = [0, 1, 2, 3, 4].filter(d => iTeachOn(d + 1));
   const hideOther = !!state.settings.hideOtherDays && myDays.length > 0;
   const shownDays = hideOther ? myDays : [0, 1, 2, 3, 4];
@@ -1128,7 +1128,14 @@ function renderWeek(v) {
     const hw = state.dayHomework[di] || [];
     maxHw = Math.max(maxHw, hw.length);
     const fixedEv = fixedHTML(di);
-    cols += `<div data-di="${di}" class="day ${fixedEv ? 'has-fixed' : ''} ${di === todayIso ? 'today' : ''} ${owner === 'partner' && !off ? 'partner-day' : ''} ${off ? 'off off-' + off.type : ''}">
+    const dayCls = `${di === todayIso ? 'today' : ''} ${owner === 'partner' && !off ? 'partner-day' : ''} ${off ? 'off off-' + off.type : ''}`;
+    heads += `<div class="day ${dayCls}"><div class="day-head">
+        <div class="dh-name">${DAYS_LONG[d]}</div>
+        <div class="dh-date">${date.getDate()}. ${MONTHS[date.getMonth()]}</div>
+        ${off ? `<div class="dh-off">${off.type === 'feiertag' ? 'Feiertag: ' : ''}${esc(off.name)}</div>` : owner === 'partner' ? `<div class="dh-owner">${esc(partnerName())}</div>` : ''}
+        ${dayBadges ? `<div class="dh-badges"><span class="bdg-row">${dayBadges}</span></div>` : ''}
+      </div></div>`;
+    cols += `<div data-di="${di}" class="day ${fixedEv ? 'has-fixed' : ''} ${dayCls}">
       <div class="day-head">
         <div class="dh-name">${DAYS_LONG[d]}</div>
         <div class="dh-date">${date.getDate()}. ${MONTHS[date.getMonth()]}</div>
@@ -1184,6 +1191,10 @@ function renderWeek(v) {
   ${holName ? `<div class="notice holiday">${esc(holName)}: Diese Woche ist unterrichtsfrei.</div>` : ''}
   ${offNotes.length ? `<div class="off-notes">${offNotes.map(x => `<span class="off-chip ${x.type}">${x.type === 'feiertag' ? 'Feiertag ' : 'schulfrei '}${esc(x.label)}</span>`).join('')}</div>` : ''}
   ${Object.keys(rowScale).length ? '<p class="row-reset no-print"><button type="button" class="link" data-rowreset>Zeilenhöhen zurücksetzen</button></p>' : ''}
+  <section class="week-dayheads" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px" aria-hidden="false">
+    <div class="times"><div class="day-head corner"></div></div>
+    ${heads}
+  </section>
   <section class="week-grid ${lessonClip ? 'clip-mode' : ''}" style="--ndays:${shownDays.length};--headh:${52 + (chipRow ? 20 : 0) + (headExtra ? 40 : 0)}px;--tasksh:${(maxTasks + 1) * 26 + 8}px;--hwh:${(maxHw + 1) * 26 + 8}px;--lateh:${Math.max(40, maxLate * 26 + 14)}px">
     <div class="times">
       <div class="day-head corner"></div>

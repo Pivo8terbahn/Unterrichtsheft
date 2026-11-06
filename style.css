@@ -725,9 +725,18 @@ table.pres-table { width: 100%; border-collapse: collapse; font-size: 13px; min-
 .week-head.compact .wh-title { padding-top: 6px; padding-bottom: 6px; }
 .week-head.compact .wh-title h1 { font-size: 22px; }
 .ink-bar, .clip-bar { top: calc(var(--tb-h) + var(--wh-h) + 6px); }
-.week-grid .day-head { position: sticky; top: calc(var(--tb-h) + var(--wh-h) + var(--bar-h)); z-index: 8; }
+/* Wochentage als eigene Zeile: bleibt bis zum Ende der Wochenseite oben stehen */
+.week-dayheads { display: grid; grid-template-columns: 62px repeat(var(--ndays, 5), minmax(0, 1fr)); position: sticky; top: calc(var(--tb-h) + var(--wh-h) + var(--bar-h)); z-index: 14;
+  border: 1px solid var(--ochre-line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; background: var(--ochre); box-shadow: 0 4px 6px -4px rgba(0,0,0,.25); }
+.week-dayheads + .week-grid { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; --headh: 0px !important; }
+.week-dayheads + .week-grid .day > .day-head, .week-dayheads + .week-grid .times > .day-head { display: none; }
+@media (max-width: 760px) {
+  .week-dayheads { display: none; }
+  .week-dayheads + .week-grid { --headh: auto !important; border-top: 0; }
+  .week-dayheads + .week-grid .day > .day-head { display: flex; }
+}
 @media print {
-  .week-head, .week-grid .day-head, .ink-bar, .clip-bar { position: static !important; }
+  .week-head, .week-dayheads, .ink-bar, .clip-bar { position: static !important; }
   .week-head.compact .wh-band { display: flex !important; }
 }
 
