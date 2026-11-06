@@ -1,6 +1,6 @@
 // ===================================================================
 // Suche über das ganze Unterrichtsheft (Lupe in der Kopfzeile, Ctrl+K)
-// Durchsucht Lektionen, Tagesnotizen, Hausaufgaben, Anmerkungen zur Woche, Termine,
+// Durchsucht Lektionen, Pinnwand, Tagesnotizen, Hausaufgaben, Anmerkungen zur Woche, Termine,
 // CoWork-Besprechungen, Besprechungen am Mittag, Präsenznachmittage, Aufgaben und Jahresplanung.
 // ===================================================================
 const searchDlg = document.createElement('dialog');
@@ -38,6 +38,8 @@ function searchCollect() {
     const [pid, di] = k.split('|'), p = (state.placements || []).find(x => x.id === pid);
     add('cowork', di, (p && p.meeting ? p.meeting.title : 'Besprechung'), [d.agenda, d.observe].filter(Boolean).join(' · '), { week: di });
   }
+  // Pinnwand
+  for (const n of state.stickies || []) if ((n.text || '').trim()) add('note', '', 'Pinnwand', n.text, { agenda: true }, n.color);
   // Aufgaben
   for (const t of state.todos || []) add('todo', t.due || t.week || '', (t.done ? '✓ ' : '') + t.text, t.meetTitle || '', { agenda: true });
   // Jahresplanung: Themen pro Woche

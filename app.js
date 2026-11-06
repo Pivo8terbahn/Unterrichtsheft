@@ -104,7 +104,7 @@ function defaults() {
       cowork: defaultCowork(), badges: defaultBadges(), birthdays: [],
       me: { name: '' }, partner: { name: '', email: '', phone: '', note: '', color: '#8e6bd8' }, who: {}
     },
-    yearplan: {}, weekNotes: {}, weekMeta: {}, daySpecial: {}, dayTasks: {}, dayHomework: {}, shopping: [], gameRoll: {}, meetDetails: {}, ink: {}, lessons: {}, placements: [], events: [], todos: [],
+    yearplan: {}, weekNotes: {}, weekMeta: {}, daySpecial: {}, dayTasks: {}, dayHomework: {}, shopping: [], stickies: [], gameRoll: {}, meetDetails: {}, ink: {}, lessons: {}, placements: [], events: [], todos: [],
     presence: typeof PRESENCE_2627 !== 'undefined' ? PRESENCE_2627.map(x => ({ ...x })) : [],
     meetings: [],
     fixed: typeof SWIM_2627 !== 'undefined' ? SWIM_2627.map(x => ({ ...x })) : [],
@@ -148,6 +148,7 @@ function migrate(s) {
   if (!out.meetings) out.meetings = [];
   if (!out.dayHomework) out.dayHomework = {};
   if (!out.shopping) out.shopping = [];
+  if (!out.stickies) out.stickies = [];
   if (!out.gameRoll) out.gameRoll = {};
   if (!out.meetDetails) out.meetDetails = {};
   if (!out.ink) out.ink = {};
@@ -2289,6 +2290,8 @@ function renderYear(v) {
 // ----- Termine & To-dos -----
 
 // Alle Einträge für die Terminliste: eigene Termine, Feiertage, Ferien, Lernkontrollen, einmalige Kennzeichen, Geburtstage
+// Farben der Notizzettel auf der Pinnwand
+const STICKY_COLORS = [['#fff176', 'Gelb'], ['#ffb3c7', 'Rosa'], ['#b9f0b0', 'Grün'], ['#b3dcff', 'Blau'], ['#ffd29a', 'Orange'], ['#dcc9ff', 'Lila']];
 // Arten von Terminen: Elterngespräche und Orientierungsgespräche mit eigener Farbe
 const EV_KINDS = { termin: { label: 'Termin', color: '#bf9000' }, eltern: { label: 'Elterngespräch', color: '#d9467a' }, orient: { label: 'Orientierungsgespräch', color: '#0f8a8a' }, ict: { label: 'ICT', color: '#4b3fb0' } };
 let lastEvKind = 'termin';
@@ -2427,6 +2430,15 @@ function renderAgenda(v) {
           <button type="button" class="icon-btn" data-deltodo="${t.id}" aria-label="Aufgabe löschen">✕</button></li>`).join('') || '<li class="muted">Nichts offen.</li>'}</ul>
       ${state.todos.some(t => t.done) ? '<button type="button" class="link" data-cleardone>Erledigte entfernen</button>' : ''}
     </section>
+    <section class="card sticky-card">
+      <h2>Pinnwand <small class="muted">Langfristig merken und beachten</small></h2>
+      <div class="sticky-add no-print">${STICKY_COLORS.map(([c, n]) => `<button type="button" class="sticky-new" style="--sc:${c}" data-stickynew="${c}" title="Neue Notiz (${n})" aria-label="Neue Notiz ${n}">+</button>`).join('')}<span class="muted">Neue Notiz in der gewünschten Farbe</span></div>
+      <div class="sticky-board">${(state.stickies || []).map((n, i) => `<div class="sticky" style="--sc:${n.color};--rot:${[-1.6, 1.1, -0.6, 1.5, -1.2, 0.7][i % 6]}deg" draggable="true" data-sticky="${n.id}">
+          <div class="sticky-tools no-print"><span class="sticky-colors">${STICKY_COLORS.map(([c, nm]) => `<button type="button" class="sticky-dot ${c === n.color ? 'on' : ''}" style="--sc:${c}" data-stickycolor="${n.id}|${c}" title="${nm}" aria-label="Farbe ${nm}"></button>`).join('')}</span><button type="button" class="icon-btn" data-stickydel="${n.id}" aria-label="Notiz entfernen" title="Notiz entfernen">✕</button></div>
+          <textarea data-stickytext="${n.id}" placeholder="Das will ich mir merken …" aria-label="Notiz">${esc(n.text)}</textarea>
+          <small class="sticky-date">${n.created ? fmtShort(parse(n.created)) + parse(n.created).getFullYear() : ''}</small>
+        </div>`).join('') || '<p class="muted">Noch keine Notizen. Wähle oben eine Farbe für die erste Notiz.</p>'}</div>
+    </section>
     <section class="card shop-card">
       <h2>Geplante Einkäufe</h2>
       <form class="add-form" data-addshop>
@@ -2461,9 +2473,36 @@ function renderAgenda(v) {
     save(); render();
     $(which)?.focus();
   };
+  v.oninput = e => {
+    const id = e.target.dataset.stickytext; if (!id) return;
+    const n = state.stickies.find(x => x.id === id); if (n) { n.text = e.target.value; autosize(e.target); save(); }
+  };
+  autosizeAll(v);
+  // Notizen per Ziehen umordnen
+  let dragSticky = null;
+  v.ondragstart = e => { const st = e.target.closest && e.target.closest('[data-sticky]'); if (!st || e.target.matches('textarea')) return; dragSticky = st.dataset.sticky; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragSticky); } catch {} st.classList.add('dragging'); };
+  v.ondragover = e => { if (!dragSticky) return; const st = e.target.closest('[data-sticky]'); if (st) { e.preventDefault(); v.querySelectorAll('.sticky.drop').forEach(x => x.classList.remove('drop')); if (st.dataset.sticky !== dragSticky) st.classList.add('drop'); } };
+  v.ondrop = e => {
+    if (!dragSticky) return; e.preventDefault();
+    const st = e.target.closest('[data-sticky]'); if (!st || st.dataset.sticky === dragSticky) return;
+    const from = state.stickies.findIndex(x => x.id === dragSticky), [it] = state.stickies.splice(from, 1);
+    state.stickies.splice(state.stickies.findIndex(x => x.id === st.dataset.sticky) + (from <= state.stickies.findIndex(x => x.id === st.dataset.sticky) ? 1 : 0), 0, it);
+    dragSticky = null; save(); render();
+  };
+  v.ondragend = () => { dragSticky = null; v.querySelectorAll('.sticky.dragging,.sticky.drop').forEach(x => x.classList.remove('dragging', 'drop')); };
   v.onclick = e => {
-    const a = e.target.closest('[data-todofilter],[data-delev],[data-deltodo],[data-cleardone],[data-gotoweek],[data-delpres],[data-pres],[data-cwopen],[data-delshop],[data-clearshop]');
+    const a = e.target.closest('[data-stickynew],[data-stickycolor],[data-stickydel],[data-todofilter],[data-delev],[data-deltodo],[data-cleardone],[data-gotoweek],[data-delpres],[data-pres],[data-cwopen],[data-delshop],[data-clearshop]');
     if (!a) return;
+    if (a.dataset.stickynew) {
+      state.stickies.unshift({ id: uid(), text: '', color: a.dataset.stickynew, created: iso(new Date()) }); save(); render();
+      v.querySelector('.sticky textarea')?.focus(); return;
+    }
+    if (a.dataset.stickycolor) { const [id, c] = a.dataset.stickycolor.split('|'); const n = state.stickies.find(x => x.id === id); if (n) { n.color = c; save(); render(); } return; }
+    if (a.dataset.stickydel) {
+      const n = state.stickies.find(x => x.id === a.dataset.stickydel);
+      if (n && n.text.trim() && !confirm('Diese Notiz entfernen?')) return;
+      state.stickies = state.stickies.filter(x => x.id !== a.dataset.stickydel); save(); render(); return;
+    }
     if (a.dataset.todofilter !== undefined) { todoFilter = todoFilter === a.dataset.todofilter ? '' : a.dataset.todofilter; render(); return; }
     if (a.dataset.delshop) { state.shopping = state.shopping.filter(x => x.id !== a.dataset.delshop); save(); render(); return; }
     if ('clearshop' in a.dataset) { state.shopping = state.shopping.filter(x => !x.done); save(); render(); return; }
