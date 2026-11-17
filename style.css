@@ -855,3 +855,7 @@ select.ag-kind option { color: #222; background: #fff; text-transform: none; fon
 .sticky-date { position: absolute; right: 10px; bottom: 4px; font-size: 10px; color: rgba(0,0,0,.4); }
 @media (hover: none) { .sticky-tools { opacity: 1; } }
 @media print { .sticky { transform: none; box-shadow: none; border: 1px solid #999; } }
+
+/* Zusammenarbeit */
+.ident-box select, .ident-box input { border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font: inherit; background: #fff; }
+.edited-by { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: right; }

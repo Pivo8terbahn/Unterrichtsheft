@@ -10,6 +10,8 @@ const fsLS = {
   set(k, v) { try { if (v === undefined || v === null) localStorage.removeItem('uh-fs-' + k); else localStorage.setItem('uh-fs-' + k, JSON.stringify(v)); } catch {} }
 };
 const fsCanWrite = () => typeof window.showSaveFilePicker === 'function';
+let fsNotice = '', fsNoticeAt = 0; // Hinweis «Änderungen von … übernommen» bleibt eine Minute sichtbar
+const fsNoticeNow = () => (Date.now() - fsNoticeAt < 60000 ? fsNotice : '');
 let fsHandle = null, fsGranted = false, fsBusy = false, fsAgain = false, fsTimer = null;
 const fsHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const fsGraphOn = () => typeof syncLS !== 'undefined' && syncLS.get('on', false);
@@ -18,7 +20,7 @@ const fsGraphOn = () => typeof syncLS !== 'undefined' && syncLS.get('on', false)
 async function fsBuildPackage() {
   const images = {};
   for (const k of await idbKeys('images')) { const b = await idbGet('images', k); if (b) images[k] = await blobToDataURL(b); }
-  return { app: 'unterrichtsheft', kind: 'sync', savedAt: new Date().toISOString(), state, images };
+  return { app: 'unterrichtsheft', kind: 'sync', savedAt: new Date().toISOString(), by: typeof identName === 'function' ? identName() : '', state, images };
 }
 async function fsStoreImages(images) {
   let n = 0;
@@ -85,6 +87,7 @@ async function fsSyncFile(first) {
       const pkg = JSON.parse(await f.text());
       const r = await fsApplyRemote(pkg, { silentFirst: false });
       needWrite = needWrite || !r.sameAsRemote;
+      if (r.changed && pkg.by && pkg.by !== identName()) { fsNotice = `☁ Änderungen von ${pkg.by} übernommen ${fsHM()}`; fsNoticeAt = Date.now(); }
     } else if (f.size === 0) needWrite = true;
     if (needWrite) {
       if (JSON.stringify(state) !== startSnap) { /* während des Lesens geändert: einfach den aktuellen Stand schreiben */ }
@@ -96,7 +99,7 @@ async function fsSyncFile(first) {
     }
     fsLS.set('dirty', false);
     fsLS.set('last', fsHM());
-    setSyncState('☁ OneDrive-Datei aktuell ' + fsHM(), 'ok');
+    setSyncState(fsNoticeNow() || '☁ OneDrive-Datei aktuell ' + fsHM(), 'ok');
   } catch (e) {
     console.error(e);
     if (e.name === 'NotAllowedError') { fsGranted = false; fsStatus(); }
@@ -110,7 +113,7 @@ async function fsSyncFile(first) {
 let fsStarted = false;
 function fsStart() {
   if (fsStarted) return; fsStarted = true;
-  setInterval(() => { if (document.visibilityState === 'visible') fsSyncFile(); }, 30000);
+  setInterval(() => { if (document.visibilityState === 'visible') fsSyncFile(); }, 15000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') fsSyncFile(); });
 }
 
@@ -120,10 +123,11 @@ async function fsLoadFromFile(file) {
     const pkg = JSON.parse(await file.text());
     const r = await fsApplyRemote(pkg);
     fsLS.set('dirty', !r.sameAsRemote);
+    if (r.changed && pkg.by && pkg.by !== identName()) { fsNotice = `☁ Änderungen von ${pkg.by} übernommen ${fsHM()}`; fsNoticeAt = Date.now(); }
     fsLS.set('mode', 'manual'); fsLS.set('loaded', fsHM() + ', ' + new Date().toLocaleDateString('de-CH'));
     fsSessionDone = true;
     fsStatus(); fsPrepareSoon();
-    setSyncState('☁ Aus OneDrive geladen ' + fsHM(), 'ok');
+    setSyncState(fsNoticeNow() || '☁ Aus OneDrive geladen ' + fsHM(), 'ok');
   } catch (e) { alert('Laden nicht möglich: ' + e.message); }
   syncMountCard();
 }
@@ -207,7 +211,16 @@ function folderCardHTML() {
       <div class="btn-row"><label class="btn primary">Aus OneDrive laden<input type="file" accept="application/json,.json" hidden data-fsload></label>
       <button type="button" class="btn primary" data-fsync="save">In OneDrive speichern</button></div>`;
   }
-  return `<div class="fs-box"><h3>Abgleich über den OneDrive-Ordner</h3>
+  const id = identity();
+  const identBox = `<div class="fs-box ident-box"><h3>Wer arbeitet an diesem Gerät?</h3>
+    <p class="hint">Wichtig, wenn mehrere Personen im gleichen Unterrichtsheft arbeiten: «Nur meine Tage» richtet sich danach, und bei Lektionen steht, wer sie zuletzt bearbeitet hat. Gilt nur für dieses Gerät.</p>
+    <div class="btn-row"><select data-ident aria-label="Person an diesem Gerät">
+      <option value="me" ${id.role === 'me' ? 'selected' : ''}>${esc(myName())}</option>
+      <option value="partner" ${id.role === 'partner' ? 'selected' : ''}>${esc(partnerName())} (Stellenpartnerin)</option>
+      <option value="shp" ${id.role === 'shp' ? 'selected' : ''}>SHP</option>
+      <option value="other" ${id.role === 'other' ? 'selected' : ''}>Weitere Person</option>
+    </select>${id.role === 'shp' || id.role === 'other' ? `<input data-identname value="${esc(id.name || '')}" placeholder="Name oder Kürzel" aria-label="Name oder Kürzel">` : ''}</div></div>`;
+  return identBox + `<div class="fs-box"><h3>Abgleich über den OneDrive-Ordner</h3>
     <p class="hint">Funktioniert ohne Microsoft-Anmeldung. Bilder und Dateien sind in der Datendatei enthalten.</p>${body}</div>`;
 }
 function folderHandleClick(e) {
@@ -226,6 +239,8 @@ function folderHandleClick(e) {
   return true;
 }
 function folderHandleChange(e) {
+  if (e.target.matches('[data-ident]')) { const old = identity(); setIdentity({ role: e.target.value, name: e.target.value === old.role ? old.name : '' }); syncMountCard(); render(); return true; }
+  if (e.target.matches('[data-identname]')) { setIdentity({ ...identity(), name: e.target.value.trim() }); return true; }
   if (!e.target.matches('[data-fsload]')) return false;
   const f = e.target.files && e.target.files[0];
   if (f) fsLoadFromFile(f);

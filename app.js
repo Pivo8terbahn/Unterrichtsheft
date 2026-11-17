@@ -414,6 +414,18 @@ const myName = () => (state.settings.me.name || '').trim() || 'Ich';
 const initials = n => n.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
 const WHO_LABEL = w => w === 'partner' ? partnerName() : w === 'both' ? 'Beide' : myName();
 // Unterrichte ich an diesem Wochentag (1 = Montag) mindestens eine Lektion?
+// ----- Wer arbeitet an diesem Gerät? (pro Gerät gespeichert, nicht abgeglichen) -----
+// role: 'me' = Person A (Einstellungen › ich), 'partner' = Stellenpartnerin, 'shp' = SHP, 'other' = weitere Person
+function identity() { try { return JSON.parse(localStorage.getItem('uh-ident') || 'null') || { role: 'me' }; } catch { return { role: 'me' }; } }
+function setIdentity(v) { try { localStorage.setItem('uh-ident', JSON.stringify(v)); } catch {} }
+function identName() { const i = identity(); return i.role === 'me' ? myName() : i.role === 'partner' ? partnerName() : (i.name || (i.role === 'shp' ? 'SHP' : 'Weitere Person')); }
+function teachesOn(d, role) {
+  const s = state.settings;
+  if (role === 'partner') return s.slots.some(sl => s.timetable[d + '-' + sl.id] && whoPlan(d, sl.id) !== 'me');
+  return iTeachOn(d);
+}
+// «Nur meine Tage» gilt pro Gerät
+function hideOtherLocal() { try { const v = localStorage.getItem('uh-hideother'); return v === null ? !!state.settings.hideOtherDays : v === '1'; } catch { return false; } }
 function iTeachOn(d) {
   const s = state.settings;
   return s.slots.some(sl => s.timetable[d + '-' + sl.id] && whoPlan(d, sl.id) !== 'partner');
@@ -1055,8 +1067,9 @@ function renderWeek(v) {
 
   let cols = '';
   let heads = '', headExtra = 0, chipRow = false, maxTasks = 0, maxHw = 0, maxLate = 0; // Höhe von Kopf- und Notizzeile nach Inhalt
-  const myDays = [0, 1, 2, 3, 4].filter(d => iTeachOn(d + 1));
-  const hideOther = !!state.settings.hideOtherDays && myDays.length > 0;
+  const myRole = identity().role;
+  const myDays = (myRole === 'me' || myRole === 'partner') ? [0, 1, 2, 3, 4].filter(d => teachesOn(d + 1, myRole)) : [];
+  const hideOther = hideOtherLocal() && myDays.length > 0;
   const shownDays = hideOther ? myDays : [0, 1, 2, 3, 4];
   const midDay = shownDays[Math.floor(shownDays.length / 2)];
   for (const d of shownDays) {
@@ -1177,7 +1190,7 @@ function renderWeek(v) {
     <div class="wh-band">
       <label class="wh-notes"><span>Anmerkungen zur Woche:</span><textarea data-weeknote="${mk}" rows="1" placeholder="z. B. Schulreise am Donnerstag, Elterngespräche">${esc(state.weekNotes[mk] || '')}</textarea></label>
       <div class="wh-legend">
-        <label class="lg-toggle no-print" title="${myDays.length ? 'Blendet die Tage aus, an denen du laut Stundenplan nicht unterrichtest' : 'Lege zuerst im Stundenplan fest, wer wann unterrichtet'}"><input type="checkbox" data-hideother ${state.settings.hideOtherDays ? 'checked' : ''} ${myDays.length ? '' : 'disabled'}> Nur meine Tage</label>
+        <label class="lg-toggle no-print" title="${myDays.length ? 'Blendet die Tage aus, an denen du laut Stundenplan nicht unterrichtest' : 'Lege zuerst im Stundenplan fest, wer wann unterrichtet'}"><input type="checkbox" data-hideother ${hideOther ? 'checked' : ''} ${myDays.length ? '' : 'disabled'}> Nur meine Tage</label>
         <span><i class="lg me"></i>${esc(myName())}</span>
         <span><i class="lg partner"></i>${esc(partnerName())}</span>
         <span><i class="lg both"></i>Beide</span>
@@ -1308,7 +1321,7 @@ function renderWeek(v) {
   v.onchange = e => {
     const ds = e.target.dataset;
     if (e.target.matches('[data-gamesout]')) { state.settings.gamesOutdoor = e.target.checked; save(); render(); return; }
-    if (e.target.matches('[data-hideother]')) { state.settings.hideOtherDays = e.target.checked; save(); render(); return; }
+    if (e.target.matches('[data-hideother]')) { try { localStorage.setItem('uh-hideother', e.target.checked ? '1' : '0'); } catch {} render(); return; }
     if (e.target.matches('[data-jump]') && e.target.value) { currentMonday = monday(parse(e.target.value)); render(); }
     else if (ds.todo) { const t = state.todos.find(x => x.id === ds.todo); if (t) { t.done = e.target.checked; save(); render(); } }
     else if (ds.dtaskdone) {
@@ -1675,6 +1688,7 @@ function openLesson(key) {
         </div>
         <p class="hint repeat-msg" aria-live="polite"></p>
       </section>
+      ${les && les.by ? `<p class="edited-by">Zuletzt bearbeitet von ${esc(les.by)}${les.at ? ', ' + fmtShort(new Date(les.at)) + ' ' + hhmm(new Date(les.at).getHours() * 60 + new Date(les.at).getMinutes()).replace(':', '.') + ' Uhr' : ''}</p>` : ''}
       <div class="panel-foot">
         <span class="btn-row"><button type="button" class="btn small" data-copylesson title="Lektion kopieren und an einer anderen Stelle einfügen">📋 Kopieren</button><button type="button" class="btn danger small" data-clearlesson>Lektion leeren</button>${chainL.length > 1 ? '<button type="button" class="btn small" data-unmerge>Lektionen trennen</button>' : ''}</span>
         <button class="btn primary" value="close">Fertig</button>
@@ -1723,6 +1737,7 @@ dlg.addEventListener('input', e => {
   if (!f || !openLessonKey) return;
   const les = ensureLesson(openLessonKey);
   les[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  les.by = identName(); les.at = Date.now();
   if (e.target.tagName === 'TEXTAREA') autosize(e.target);
   save();
   if (f === 'subjectId' || f === 'who') openLesson(openLessonKey);
@@ -2154,7 +2169,7 @@ function renderReview(v) {
     <h1>Jahresplanung ${sjLabel()}</h1>
     ${yearTabsHTML()}
     <p class="hint">Zusammenfassung aus den Themen der einzelnen Lektionen. <span class="rv-done">✓ durchgeführt</span> · <span class="rv-planned">geplant</span> · <span class="rv-cancelled">fällt aus</span>. Ein Klick auf ein Thema öffnet die Lektion.</p>
-    <div class="rv-filter no-print">${[['all', 'Alle Lektionen'], ['me', 'Meine (inkl. Team)'], ['partner', esc(partnerName()) + ' (inkl. Team)']].map(([k, t]) => `<button type="button" class="tag ${reviewWho === k ? 'on' : ''}" data-rvwho="${k}">${t}</button>`).join('')}
+    <div class="rv-filter no-print">${[['all', 'Alle Lektionen'], ['me', esc(myName()) + ' (inkl. Team)'], ['partner', esc(partnerName()) + ' (inkl. Team)']].map(([k, t]) => `<button type="button" class="tag ${reviewWho === k ? 'on' : ''}" data-rvwho="${k}">${t}</button>`).join('')}
       <button type="button" class="btn small" data-print>Drucken</button></div>
   </section>
   ${cols.length ? `<div class="table-wrap year-wrap">
