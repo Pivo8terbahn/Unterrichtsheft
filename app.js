@@ -102,7 +102,7 @@ function defaults() {
       className: '4. Klasse', start: '2026-08-17', end: '2027-07-02', subjects, slots, timetable: {},
       calendarYear: '2026/27', holidays: {}, schoolForced: [], extraOff: { '2026-09-29': 'Michaelstag' },
       cowork: defaultCowork(), badges: defaultBadges(), birthdays: [],
-      me: { name: '' }, partner: { name: '', email: '', phone: '', note: '', color: '#8e6bd8' }, who: {}
+      me: { name: '', color: '' }, partner: { name: '', email: '', phone: '', note: '', color: '#8e6bd8' }, who: {}
     },
     yearplan: {}, weekNotes: {}, weekMeta: {}, daySpecial: {}, dayTasks: {}, dayHomework: {}, shopping: [], stickies: [], gameRoll: {}, meetDetails: {}, ink: {}, lessons: {}, placements: [], events: [], todos: [],
     presence: typeof PRESENCE_2627 !== 'undefined' ? PRESENCE_2627.map(x => ({ ...x })) : [],
@@ -170,7 +170,7 @@ function migrate(s) {
     out.imports.subjSHE = true;
   }
   if (!out.fixed) out.fixed = typeof SWIM_2627 !== 'undefined' ? SWIM_2627.map(x => ({ ...x })) : [];
-  st.me = Object.assign({ name: '' }, st.me || {});
+  st.me = Object.assign({ name: '', color: '' }, st.me || {});
   st.partner = Object.assign({}, d.settings.partner, st.partner || {});
   st.who = st.who || {};
   if (!s.version || s.version < 4) {
@@ -537,11 +537,48 @@ async function downscale(file, max = 1600) {
 }
 const blobToDataURL = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
 
+// ---------- Farbschema (pro Gerät) ----------
+// gold: Kopf der Woche, ochre: Bänder und Tagesköpfe, line: Rahmen, cream: Lektionsfelder, grid: Rasterlinien
+const THEMES = [
+  { id: 'gold', name: 'Gold (Standard)', gold: '#ffd966', ochre: '#bf9000', line: '#a37b00', cream: '#fff2cc', grid: '#ead9a3' },
+  { id: 'blau', name: 'Himmelblau', gold: '#a9d6f5', ochre: '#5a9fd4', line: '#3f86bd', cream: '#e8f4fd', grid: '#c3def2' },
+  { id: 'gruen', name: 'Salbei', gold: '#c3e2b0', ochre: '#79ad5f', line: '#5f9446', cream: '#eef7e8', grid: '#d2e8c4' },
+  { id: 'tuerkis', name: 'Türkis', gold: '#a6e3df', ochre: '#3fa9a1', line: '#2f8f88', cream: '#e6f7f6', grid: '#bfe5e2' },
+  { id: 'rose', name: 'Rosé', gold: '#f7c4d2', ochre: '#d9809a', line: '#c4657f', cream: '#fdedf1', grid: '#f1cfd9' },
+  { id: 'lavendel', name: 'Lavendel', gold: '#d6ccf4', ochre: '#9483d4', line: '#7c6bc0', cream: '#f2effc', grid: '#ddd5f3' },
+  { id: 'apricot', name: 'Apricot', gold: '#fbd0a8', ochre: '#e0904c', line: '#c97735', cream: '#fff0e3', grid: '#f2d4b8' },
+  { id: 'grau', name: 'Grau', gold: '#dfe1e5', ochre: '#9da3ad', line: '#858c97', cream: '#f5f6f8', grid: '#dcdfe3' }
+];
+const hexRgb = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const rgbHex = a => '#' + a.map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
+const mixHex = (a, b, w) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v * w + y[i] * (1 - w))); };
+const lum = h => { const [r, g, b] = hexRgb(h).map(v => v / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+// Eigene Farbe: daraus alle Töne ableiten; zu dunkle Farben aufhellen, damit die dunkle Schrift lesbar bleibt
+function themeFromColor(c) {
+  let o = c, k = 0;
+  while (lum(o) < 0.38 && k++ < 20) o = mixHex(o, '#ffffff', 0.88);
+  while (lum(o) > 0.72 && k++ < 40) o = mixHex(o, '#000000', 0.9);
+  return { id: 'custom', name: 'Eigene Farbe', base: c, gold: mixHex(o, '#ffffff', 0.5), ochre: o, line: mixHex(o, '#000000', 0.85), cream: mixHex(o, '#ffffff', 0.16), grid: mixHex(o, '#ffffff', 0.38) };
+}
+function themeGet() { try { return JSON.parse(localStorage.getItem('uh-theme') || 'null') || { id: 'gold' }; } catch { return { id: 'gold' }; } }
+function themeSet(v) { try { localStorage.setItem('uh-theme', JSON.stringify(v)); } catch {} }
+function themeCurrent() { const t = themeGet(); return t.id === 'custom' && t.base ? themeFromColor(t.base) : (THEMES.find(x => x.id === t.id) || THEMES[0]); }
+function applyColors() {
+  const r = document.documentElement.style, th = themeCurrent(), s = state.settings;
+  r.setProperty('--gold', th.gold); r.setProperty('--ochre', th.ochre); r.setProperty('--ochre-line', th.line);
+  r.setProperty('--cream', th.cream); r.setProperty('--grid-line', th.grid);
+  r.setProperty('--partner', s.partner.color || '#8e6bd8');
+  // eigene Farbe in der Wochenansicht (leer = Farbe des Designs)
+  if (s.me.color) { r.setProperty('--me-bg', mixHex(s.me.color, '#ffffff', 0.16)); r.setProperty('--me-lg', mixHex(s.me.color, '#ffffff', 0.4)); r.setProperty('--me', s.me.color); }
+  else { r.removeProperty('--me-bg'); r.removeProperty('--me-lg'); r.removeProperty('--me'); }
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = th.ochre;
+}
+
 // ---------- Darstellung ----------
 function render() {
   if (state.meetings) syncUtMeetings();
   buildOff();
-  document.documentElement.style.setProperty('--partner', state.settings.partner.color || '#8e6bd8');
+  applyColors();
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
   $('#brandClass').textContent = [state.settings.className, sjLabel()].filter(Boolean).join(' · ');
   const v = $('#view');
@@ -2596,6 +2633,12 @@ function renderSettings(v) {
       </div>
       <p class="hint">Quelle: Schulferien 2026/27 bis 2030/31, Amt für gemeindliche Schulen Kanton Zug (Stand 28. Mai 2026), zg.ch/schulferien.</p>` : '<p class="hint">Ohne Ferienplan markierst du die Ferienwochen selbst in der Jahresplanung.</p>'}
     </section>
+    <section class="card" id="themeCard">
+      <h2>Darstellung</h2>
+      <p class="hint" style="margin:0 0 10px">Farbschema des Hefts. Gilt nur für dieses Gerät, Personen im gleichen Heft können ein anderes wählen.</p>
+      <div class="theme-list">${THEMES.map(th => `<button type="button" class="theme-sw ${themeGet().id === th.id ? 'on' : ''}" data-theme="${th.id}" aria-pressed="${themeGet().id === th.id}" style="--t1:${th.gold};--t2:${th.ochre};--t3:${th.cream}"><i></i><span>${esc(th.name)}</span></button>`).join('')}</div>
+      <label class="field color-field theme-custom ${themeGet().id === 'custom' ? 'on' : ''}"><span>Eigene Farbe</span><input type="color" data-themecustom value="${esc(themeGet().base || '#bf9000')}"></label>
+    </section>
     <section class="card">
       <h2>Fächer</h2>
       <p class="hint" style="margin:0 0 10px">Farbe, Name und Kürzel. Das Kürzel steht in der Wochenansicht vor dem Eintrag, z. B. «D: Start mit Perfekt».</p>
@@ -2633,6 +2676,10 @@ function renderSettings(v) {
       <h2>Ich</h2>
       <label class="field"><span>Mein Name</span><input data-me="name" value="${esc(s.me.name)}" placeholder="Vorname Name"></label>
       <p class="hint">Erscheint in der Legende und im Stundenplan.</p>
+      <div class="me-color">
+        <label class="field color-field"><span>Meine Farbe in der Wochenansicht</span><input type="color" data-mecolor value="${esc(s.me.color || themeCurrent().cream)}"></label>
+        ${s.me.color ? '<button type="button" class="btn small" data-mecolorreset>Farbe des Designs verwenden</button>' : '<span class="hint">Zurzeit: Farbe des Designs</span>'}
+      </div>
     </section>
     <section class="card partner-card">
       <h2>Stellenpartnerin</h2>
@@ -2724,6 +2771,8 @@ function renderSettings(v) {
     else if (ds.tt) { if (t.value) s.timetable[ds.tt] = t.value; else delete s.timetable[ds.tt]; save(); render(); }
     else if (ds.who) { if (t.value === 'me') delete s.who[ds.who]; else s.who[ds.who] = t.value; save(); render(); }
     else if ('partnercolor' in ds) { s.partner.color = t.value; save(); render(); }
+    else if ('mecolor' in ds) { s.me.color = t.value; save(); render(); }
+    else if ('themecustom' in ds) { themeSet({ id: 'custom', base: t.value }); render(); }
     else if (ds.partner || ds.me) render();
     else if (ds.set === 'start' || ds.set === 'end') render();
     else if ('calyear' in ds) {
@@ -2758,6 +2807,8 @@ function renderSettings(v) {
     if (!t) return;
     const ds = t.dataset;
     if ('welcome' in ds) { showWelcome(); return; }
+    if (ds.theme) { themeSet({ id: ds.theme, base: themeGet().base }); render(); return; }
+    if ('mecolorreset' in ds) { s.me.color = ''; save(); render(); return; }
     if ('cwgadd' in ds) { s.cowork.groups.push({ id: uid(), name: 'Neue Arbeitsgruppe', members: '' }); save(); render(); return; }
     if (ds.cwgdel) {
       const g = s.cowork.groups.find(x => x.id === ds.cwgdel);

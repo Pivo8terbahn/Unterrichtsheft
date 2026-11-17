@@ -1,7 +1,7 @@
 // Service Worker: hält die App-Dateien auf dem Gerät bereit, damit sie auch ohne Internet startet.
 // Bei jeder neuen App-Version VERSION erhöhen.
 // Testversion: eigener Cache-Name (uht-), damit die Hauptversion auf derselben Adresse unberührt bleibt.
-const VERSION = 'uht-2026-11-17c';
+const VERSION = 'uht-2026-11-17d';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'games.js', 'sync.js', 'foldersync.js', 'search.js', 'import.js', 'vorlagen/Vorlage-Jahresplanung.xlsx', 'vorlagen/Vorlage-Jahresplanung.docx', 'sync-config.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   'bilder/geburtstag.jpg', 'bilder/meeting-herti-team.jpg', 'bilder/meeting-u-team.jpg', 'bilder/pausenaufsicht.jpg', 'bilder/schwimmunterricht.jpg', 'bilder/zaz-ip.jpg', 'bilder/elterngespraech.jpg'];
