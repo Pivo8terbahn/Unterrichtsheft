@@ -1,12 +1,12 @@
 // Service Worker: hält die App-Dateien auf dem Gerät bereit, damit sie auch ohne Internet startet.
 // Bei jeder neuen App-Version VERSION erhöhen.
-const VERSION = 'uh-2026-11-17a';
+const VERSION = 'uh-2026-11-17c';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'games.js', 'sync.js', 'foldersync.js', 'search.js', 'sync-config.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   'bilder/geburtstag.jpg', 'bilder/meeting-herti-team.jpg', 'bilder/meeting-u-team.jpg', 'bilder/pausenaufsicht.jpg', 'bilder/schwimmunterricht.jpg', 'bilder/zaz-ip.jpg', 'bilder/elterngespraech.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('uh-') && k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Eigene Dateien: zuerst aus dem Netz (damit Neuerungen ankommen), ohne Netz aus dem Speicher.
 // Anfragen an Microsoft (Anmeldung, OneDrive) laufen immer direkt.

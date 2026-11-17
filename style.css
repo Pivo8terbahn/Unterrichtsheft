@@ -859,3 +859,20 @@ select.ag-kind option { color: #222; background: #fff; text-transform: none; fon
 /* Zusammenarbeit */
 .ident-box select, .ident-box input { border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font: inherit; background: #fff; }
 .edited-by { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+
+/* Willkommen / Einrichtung */
+.welcome { max-width: 640px; }
+.welcome h3 { font-size: 14px; margin: 14px 0 6px; }
+.welcome h3 small { font-weight: 400; }
+.wl-mode { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 4px; padding: 8px 10px; background: var(--cream); border-radius: 10px; }
+.wl-mode label { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.welcome .form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.welcome .form-row .field { flex: 1 1 220px; }
+.welcome .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.welcome .field > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.welcome input, .welcome select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; background: #fff; }
+.wl-days { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.wl-days th { font-size: 12px; text-align: left; padding: 0 4px 3px; color: var(--muted); }
+.wl-days td { padding: 0 4px; }
+.wl-days select { width: 100%; }
+@media (max-width: 560px) { .wl-days, .wl-days tbody, .wl-days tr, .wl-days th, .wl-days td { display: block; } .wl-days tr:first-child { display: none; } }

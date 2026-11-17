@@ -543,7 +543,7 @@ function render() {
   buildOff();
   document.documentElement.style.setProperty('--partner', state.settings.partner.color || '#8e6bd8');
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
-  $('#brandClass').textContent = `${state.settings.className} · ${sjLabel()}`;
+  $('#brandClass').textContent = [state.settings.className, sjLabel()].filter(Boolean).join(' · ');
   const v = $('#view');
   v.onclick = v.oninput = v.onchange = v.onsubmit = v.onkeydown = v.ondragstart = v.ondragover = v.ondragleave = v.ondrop = v.ondragend = null;
   ({ week: renderWeek, cowork: renderCowork, year: renderYear, agenda: renderAgenda, settings: renderSettings })[currentView](v);
@@ -2576,7 +2576,7 @@ function renderSettings(v) {
   const bdays = [...s.birthdays].sort((a, b) => a.date.localeCompare(b.date));
 
   v.innerHTML = `
-  <section class="page-head"><h1>Einstellungen</h1></section>
+  <section class="page-head"><h1>Einstellungen</h1><p><button type="button" class="btn small" data-welcome>Einrichtung (Name, Klasse, Stellenteilung) öffnen</button></p></section>
   <div class="settings-grid">
     <section class="card">
       <h2>Klasse und Schuljahr</h2>
@@ -2706,7 +2706,7 @@ function renderSettings(v) {
 
   v.oninput = e => {
     const t = e.target, ds = t.dataset;
-    if (ds.set) { s[ds.set] = t.value; if (ds.set === 'className') $('#brandClass').textContent = `${t.value} · ${sjLabel()}`; save(); }
+    if (ds.set) { s[ds.set] = t.value; if (ds.set === 'className') $('#brandClass').textContent = [t.value, sjLabel()].filter(Boolean).join(' · '); save(); }
     else if (ds.subname) { subj(ds.subname).name = t.value; save(); }
     else if (ds.subshort) { subj(ds.subshort).short = t.value; save(); }
     else if (ds.slot) { const [id, k] = ds.slot.split('|'); s.slots.find(x => x.id === id)[k] = t.value; save(); }
@@ -2757,6 +2757,7 @@ function renderSettings(v) {
     const t = e.target.closest('button');
     if (!t) return;
     const ds = t.dataset;
+    if ('welcome' in ds) { showWelcome(); return; }
     if ('cwgadd' in ds) { s.cowork.groups.push({ id: uid(), name: 'Neue Arbeitsgruppe', members: '' }); save(); render(); return; }
     if (ds.cwgdel) {
       const g = s.cowork.groups.find(x => x.id === ds.cwgdel);
@@ -2832,6 +2833,69 @@ async function importData(file) {
   alert('Sicherung eingelesen.');
 }
 
+// ---------- Willkommen: beim ersten Start die Angaben für die Stellenteilung erfassen ----------
+function showWelcome() {
+  const s = state.settings, id = identity();
+  const dayWho = d => { const v = s.slots.map(sl => whoPlan(d, sl.id)); return v.every(x => x === v[0]) ? v[0] : 'mixed'; };
+  pick.innerHTML = `<form method="dialog" class="pick welcome">
+    <h2>Willkommen im Unterrichtsheft</h2>
+    <p>Bitte richte das Heft kurz ein. Alles lässt sich später unter <b>Einstellungen</b> ändern.</p>
+    <div class="seg wl-mode" role="radiogroup" aria-label="Art der Einrichtung">
+      <label><input type="radio" name="wmode" value="new" checked> Eigenes Heft einrichten</label>
+      <label><input type="radio" name="wmode" value="join"> Einem Heft im Team beitreten</label>
+    </div>
+    <div class="wl-new">
+      <h3>Deine Angaben</h3>
+      <div class="form-row">
+        <label class="field"><span>Dein Name</span><input name="wme" value="${esc(s.me.name || '')}" placeholder="Vorname Name" autocomplete="name"></label>
+        <label class="field"><span>Klasse</span><input name="wclass" value="${esc(s.className || '')}" placeholder="z. B. 4. Klasse"></label>
+      </div>
+      <h3>Stellenteilung <small class="muted">(leer lassen, wenn du die Klasse allein führst)</small></h3>
+      <div class="form-row">
+        <label class="field"><span>Name der Stellenpartnerin</span><input name="wpartner" value="${esc(s.partner.name || '')}" placeholder="Vorname Name"></label>
+        <label class="field"><span>E-Mail (für Einladungen, freiwillig)</span><input type="email" name="wpmail" value="${esc(s.partner.email || '')}" placeholder="name@schule.ch"></label>
+      </div>
+      <p class="hint">Wer unterrichtet an welchem Tag? Wechselt es während des Tages, wähle «gemischt» und lege es danach im Stundenplan pro Lektion fest.</p>
+      <table class="wl-days"><tr>${[1, 2, 3, 4, 5].map(d => `<th>${DAYS_LONG[d - 1]}</th>`).join('')}</tr><tr>${[1, 2, 3, 4, 5].map(d => { const w = dayWho(d); return `<td><select name="wday${d}" aria-label="${DAYS_LONG[d - 1]}">
+        <option value="me" ${w === 'me' ? 'selected' : ''}>ich</option><option value="partner" ${w === 'partner' ? 'selected' : ''}>Stellenpartnerin</option>
+        <option value="both" ${w === 'both' ? 'selected' : ''}>beide</option><option value="mixed" ${w === 'mixed' ? 'selected' : ''}>gemischt</option></select></td>`; }).join('')}</tr></table>
+    </div>
+    <div class="wl-join" hidden>
+      <p>Deine Stellenpartnerin oder deine Kollegin hat das Heft schon eingerichtet und den Ordner mit der Datendatei im OneDrive mit dir geteilt.</p>
+      <label class="field"><span>Wer bist du in diesem Heft?</span><select name="wrole">
+        <option value="partner" ${id.role === 'partner' ? 'selected' : ''}>Stellenpartnerin</option>
+        <option value="me" ${id.role === 'me' ? 'selected' : ''}>Klassenlehrperson (Person, die das Heft eingerichtet hat)</option>
+        <option value="shp" ${id.role === 'shp' ? 'selected' : ''}>SHP</option>
+        <option value="other" ${id.role === 'other' ? 'selected' : ''}>weitere Person</option></select></label>
+      <label class="field"><span>Dein Name oder Kürzel</span><input name="wjname" value="${esc(id.name || '')}" placeholder="z. B. Vorname"></label>
+      <p class="hint">Nach «Weiter» öffnen sich die Einstellungen. Dort wählst du unter «Synchronisation» <b>OneDrive-Datei verbinden</b> und die geteilte Datei <b>unterrichtsheft-daten.json</b>.</p>
+    </div>
+    <div class="pick-foot"><button class="btn" value="later">Später</button><button type="button" class="btn primary" data-wsave>Speichern und weiter</button></div>
+  </form>`;
+  const f = pick.querySelector('form');
+  f.addEventListener('change', e => {
+    if (e.target.name === 'wmode') { const j = e.target.value === 'join'; f.querySelector('.wl-new').hidden = j; f.querySelector('.wl-join').hidden = !j; }
+  });
+  f.querySelector('[data-wsave]').addEventListener('click', () => {
+    const v = n => (f.querySelector(`[name=${n}]`) || {}).value || '';
+    if (f.querySelector('[name=wmode]:checked').value === 'join') {
+      const role = v('wrole');
+      setIdentity({ role, name: v('wjname').trim() });
+      if (role === 'partner' && v('wjname').trim() && !s.partner.name) s.partner.name = v('wjname').trim();
+      pick.close(); currentView = 'settings'; render();
+      setTimeout(() => document.getElementById('syncCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      return;
+    }
+    s.me.name = v('wme').trim(); s.className = v('wclass').trim();
+    s.partner.name = v('wpartner').trim(); s.partner.email = v('wpmail').trim();
+    for (const d of [1, 2, 3, 4, 5]) { const w = v('wday' + d); if (w && w !== 'mixed') for (const sl of s.slots) { if (w === 'me') delete s.who[d + '-' + sl.id]; else s.who[d + '-' + sl.id] = w; } }
+    setIdentity({ role: 'me' });
+    save(); pick.close(); currentView = 'settings'; render(); window.scrollTo(0, 0);
+  });
+  if (!pick.open) pick.showModal();
+  f.querySelector('[name=wme]').focus();
+}
+
 // ---------- Start ----------
 document.getElementById('tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
@@ -2847,6 +2911,7 @@ document.getElementById('tabs').addEventListener('click', e => {
     db = await openDB();
     const saved = await idbGet('kv', 'state');
     state = saved ? migrate(saved) : defaults();
+    const firstStart = !saved;
     // Vorlagen der Schule (nur in schuldaten.js auf dem eigenen Gerät, nicht im veröffentlichten Code)
     if (typeof importHertiOverview === 'function') importHertiOverview();
     if (typeof importStoff2627 === 'function') importStoff2627();
@@ -2860,6 +2925,7 @@ document.getElementById('tabs').addEventListener('click', e => {
     navigator.storage?.persist?.();
     render();
     resetUndo();
+    if (firstStart) showWelcome();
     window.__appReady = true;
     if (typeof syncInit === 'function') syncInit();
     if (typeof folderInit === 'function') folderInit();

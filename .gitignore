@@ -9,3 +9,6 @@ Daten/
 README.md
 ANLEITUNG-Synchronisation.md
 ARBEITSNOTIZEN.md
+testversion-erstellen.py
+# Vorlagen der Testversion (zum Herunterladen) veröffentlichen
+!testversion/vorlagen/*.docx
