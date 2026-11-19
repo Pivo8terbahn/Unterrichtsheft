@@ -535,6 +535,29 @@ async function downscale(file, max = 1600) {
 }
 const blobToDataURL = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
 
+// ---------- Einkaufsliste drucken (nur offene Einkäufe, mit Kästchen zum Abhaken) ----------
+function printShopping() {
+  const open = (state.shopping || []).filter(x => !x.done)
+    .sort((a, b) => (a.where || '').localeCompare(b.where || '', 'de') || (a.due || '9').localeCompare(b.due || '9') || a.text.localeCompare(b.text, 'de'));
+  const groups = [];
+  for (const x of open) { const k = (x.where || '').trim(); let g = groups.find(y => y.k.toLowerCase() === k.toLowerCase()); if (!g) groups.push(g = { k, items: [] }); g.items.push(x); }
+  groups.sort((a, b) => (!a.k) - (!b.k) || a.k.localeCompare(b.k, 'de'));
+  const cls = state.settings.className;
+  document.getElementById('printShop')?.remove();
+  const box = document.createElement('div');
+  box.id = 'printShop';
+  box.innerHTML = `<h1>Einkaufsliste</h1>
+    <p class="ps-meta">${cls ? esc(cls) + ' · ' : ''}gedruckt am ${fmtShort(new Date())}${new Date().getFullYear()}</p>
+    ${groups.map(g => `${groups.length > 1 || g.k ? `<h2>${g.k ? esc(g.k) : 'Weitere'}</h2>` : ''}
+      <ul>${g.items.map(x => `<li><span class="ps-box"></span><span class="ps-text">${esc(x.text)}</span>${x.due ? `<span class="ps-due">bis ${DAYS7[parse(x.due).getDay()]} ${fmtShort(parse(x.due))}</span>` : ''}</li>`).join('')}</ul>`).join('')}`;
+  document.body.appendChild(box);
+  document.body.classList.add('print-shop');
+  const done = () => { document.body.classList.remove('print-shop'); box.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
+  setTimeout(() => { if (document.body.contains(box) && !matchMedia('print').matches) done(); }, 1500);
+}
+
 // ---------- Farbschema (pro Gerät) ----------
 // gold: Kopf der Woche, ochre: Bänder und Tagesköpfe, line: Rahmen, cream: Lektionsfelder, grid: Rasterlinien
 const THEMES = [
@@ -2501,7 +2524,7 @@ function renderAgenda(v) {
         </div>`).join('') || '<p class="muted">Noch keine Notizen. Wähle oben eine Farbe für die erste Notiz.</p>'}</div>
     </section>
     <section class="card shop-card">
-      <h2>Geplante Einkäufe</h2>
+      <div class="shop-head"><h2>Geplante Einkäufe</h2>${(state.shopping || []).some(x => !x.done) ? '<button type="button" class="btn small" data-printshop title="Nur die Einkaufsliste drucken">🖨 Drucken</button>' : ''}</div>
       <form class="add-form" data-addshop>
         <input name="text" placeholder="Was? z. B. Leim, Bastelkarton" required aria-label="Einkauf">
         <input name="where" placeholder="Wo / für (optional)" aria-label="Wo oder wofür">
@@ -2552,7 +2575,7 @@ function renderAgenda(v) {
   };
   v.ondragend = () => { dragSticky = null; v.querySelectorAll('.sticky.dragging,.sticky.drop').forEach(x => x.classList.remove('dragging', 'drop')); };
   v.onclick = e => {
-    const a = e.target.closest('[data-stickynew],[data-stickycolor],[data-stickydel],[data-todofilter],[data-delev],[data-deltodo],[data-cleardone],[data-gotoweek],[data-delpres],[data-pres],[data-cwopen],[data-delshop],[data-clearshop]');
+    const a = e.target.closest('[data-stickynew],[data-stickycolor],[data-stickydel],[data-todofilter],[data-delev],[data-deltodo],[data-cleardone],[data-gotoweek],[data-delpres],[data-pres],[data-cwopen],[data-delshop],[data-clearshop],[data-printshop]');
     if (!a) return;
     if (a.dataset.stickynew) {
       state.stickies.unshift({ id: uid(), text: '', color: a.dataset.stickynew, created: iso(new Date()) }); save(); render();
@@ -2566,6 +2589,7 @@ function renderAgenda(v) {
     }
     if (a.dataset.todofilter !== undefined) { todoFilter = todoFilter === a.dataset.todofilter ? '' : a.dataset.todofilter; render(); return; }
     if (a.dataset.delshop) { state.shopping = state.shopping.filter(x => x.id !== a.dataset.delshop); save(); render(); return; }
+    if ('printshop' in a.dataset) { printShopping(); return; }
     if ('clearshop' in a.dataset) { state.shopping = state.shopping.filter(x => !x.done); save(); render(); return; }
     if (a.dataset.pres && !a.dataset.delpres) { openPresEdit(a.dataset.pres); return; }
     if (a.dataset.cwopen) { cwOpen = a.dataset.cwopen; currentView = 'cowork'; render(); return; }

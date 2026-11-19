@@ -891,6 +891,25 @@ select.ag-kind option { color: #222; background: #fff; text-transform: none; fon
 .me-color { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .me-color .hint { margin: 0 0 10px; }
 
+/* Einkaufsliste drucken */
+.shop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.shop-head h2 { margin-bottom: 0; }
+#printShop { display: none; }
+@page shop { size: A4 portrait; margin: 18mm 16mm; }
+@media print {
+  body.print-shop > *:not(#printShop) { display: none !important; }
+  body.print-shop { background: #fff; }
+  body.print-shop #printShop { display: block; page: shop; font-size: 14pt; color: #000; }
+  #printShop h1 { font-size: 22pt; margin: 0 0 2mm; }
+  #printShop .ps-meta { font-size: 10pt; color: #555; margin: 0 0 8mm; }
+  #printShop h2 { font-size: 13pt; margin: 7mm 0 2mm; padding-bottom: 1mm; border-bottom: 1px solid #999; }
+  #printShop ul { list-style: none; margin: 0; padding: 0; }
+  #printShop li { display: flex; align-items: center; gap: 4mm; padding: 2.6mm 0; border-bottom: 1px dotted #bbb; break-inside: avoid; }
+  #printShop .ps-box { flex: none; width: 5.5mm; height: 5.5mm; border: 1.6px solid #000; border-radius: 1mm; }
+  #printShop .ps-text { flex: 1; }
+  #printShop .ps-due { font-size: 10pt; color: #444; white-space: nowrap; }
+}
+
 /* ---------- Testversion: Kennzeichnung und Jahresplanung importieren ---------- */
 .test-tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 999px; background: var(--cream); color: var(--ochre-line); border: 1px solid var(--gold); vertical-align: middle; }
 .jp-help { margin: 10px 0 4px; }
